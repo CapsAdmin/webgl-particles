@@ -8,32 +8,33 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
     if (!canvas) return;
     const gpu = new GPU({ canvas: canvas, mode: "webgl2" });
 
-    const particleCount = 50;
+    const particleCount = 512;
     const width = 512;
     const height = 512;
 
-    let particles = gpu.createKernel(
-      function () {
-        const width = this.constants.width as number;
-        const height = this.constants.height as number;
+    const createParticles = (particleCount: number) => {
+      return gpu.createKernel(
+        function () {
+          const width = this.constants.width as number;
+          const height = this.constants.height as number;
 
-        let x = Math.random() * width;
-        let y = Math.random() * height;
+          let x = Math.random() * width;
+          let y = Math.random() * height;
 
-        let vx = Math.random() * 2 - 1;
-        let vy = Math.random() * 2 - 1;
+          let vx = Math.random() * 2 - 1;
+          let vy = Math.random() * 2 - 1;
 
-        return [x, y, vx * 2, vy * 2];
-      },
-      { output: [particleCount], constants: { width, height } }
-    );
+          return [x, y, vx * 2, vy * 2];
+        },
+        { output: [particleCount], constants: { width, height } }
+      )();
+    };
 
     let stepParticles = gpu.createKernel(
-      function (particles: any) {
+      function (particles: any, otherParticles: any, gravity: number) {
         const width = this.constants.width as number;
         const height = this.constants.height as number;
         const particleCount = this.constants.particleCount as number;
-        const g = 1;
 
         let [x, y, vx, vy] = particles[this.thread.x];
 
@@ -41,13 +42,13 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
         let fy = 0;
 
         for (let i = 0; i < particleCount; i++) {
-          let [x2, y2, vx2, vy2] = particles[i];
+          let [x2, y2] = otherParticles[i];
 
           let dx = x - x2;
           let dy = y - y2;
           let d = Math.sqrt(dx * dx + dy * dy);
           if (d > 0 && d < 80) {
-            let f = (g * 1) / d;
+            let f = (gravity * 1) / d;
 
             fx += f * dx * 0.5;
             fy += f * dy * 0.5;
@@ -66,7 +67,9 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
     );
 
     let renderParticles = gpu.createKernel(
-      function (particles: any) {
+      function (pixels: any, particles: any, r: number, g: number, b: number) {
+        const width = this.constants.width as number;
+        const height = this.constants.height as number;
         const particleCount = this.constants.particleCount as number;
 
         let sum = 0;
@@ -84,18 +87,46 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
 
         sum *= 0.1;
 
-        this.color(sum, sum, sum, 1);
+        let baseIndex = (this.thread.x + width * this.thread.y) * 4;
+
+        let prevR = pixels[baseIndex + 0] / 255;
+        let prevG = pixels[baseIndex + 1] / 255;
+        let prevB = pixels[baseIndex + 2] / 255;
+
+        let cr = sum * r;
+        let cg = sum * g;
+        let cb = sum * b;
+
+        cr = prevR + cr;
+        cg = prevG + cg;
+        cb = prevB + cb;
+
+        this.color(cr, cg, cb, 0);
       },
-      { output: [width, height], constants: { particleCount }, graphical: true }
+      {
+        output: [width, height],
+        constants: { particleCount, width, height },
+        graphical: true,
+        tactic: "speed",
+      }
     );
 
-    let buffer = particles();
+    let redParticles = createParticles(particleCount);
+    let blueParticles = createParticles(particleCount);
     let destroyed = false;
 
     const tick = () => {
       if (destroyed) return;
-      buffer = stepParticles(buffer) as any;
-      renderParticles(buffer);
+      redParticles = stepParticles(redParticles, blueParticles, 0.7) as any;
+      blueParticles = stepParticles(blueParticles, redParticles, -0.7) as any;
+      let res = renderParticles(
+        renderParticles.getPixels() as any,
+        redParticles,
+        1,
+        0,
+        0
+      );
+      renderParticles(renderParticles.getPixels(), blueParticles, 0, 0, 1);
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
