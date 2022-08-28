@@ -1,4 +1,3 @@
-import { GPU, IGPUKernelSettings } from "gpu.js";
 import { useEffect, useState } from "react";
 import {
   CartesianGrid,
@@ -11,38 +10,9 @@ import {
   YAxis,
 } from "recharts";
 import "./App.css";
+import { createDataTexture, createFragmentProgram } from "./WebGLHelpers";
 
-const PARTICLE_COUNT = 1000;
-
-const createShader = (
-  gl: WebGL2RenderingContext,
-  type: number,
-  source: string
-) => {
-  const shader = gl.createShader(type);
-  if (!shader) {
-    throw new Error("Failed to create shader");
-  }
-
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  const compiled = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-  if (!compiled) {
-    console.error(source);
-    let i = 1;
-    for (const line of source.split("\n")) {
-      console.log(i, line);
-      i++;
-    }
-    throw new Error(gl.getShaderInfoLog(shader) || "unknown error");
-  }
-  return shader;
-};
-
-const kernelSettings: IGPUKernelSettings = {
-  dynamicOutput: false,
-  dynamicArguments: false,
-};
+const PARTICLE_COUNT = 200;
 
 function particleDistance(dx: number, dy: number) {
   let linear = Math.sqrt((dx * dx + dy * dy) / 8);
@@ -58,19 +28,7 @@ function particleDistance(dx: number, dy: number) {
 const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
   gl.getExtension("EXT_color_buffer_float");
 
-  const TransformSize = 4;
-  const ColorSize = 3;
-  const PropertySize = 2;
-
-  function pow2ceil(v: number) {
-    var p = 2;
-    while ((v >>= 1)) {
-      p <<= 1;
-    }
-    return p;
-  }
-
-  const particles = new Float32Array(pow2ceil(particleCount * (4 + 4 + 4)));
+  const particles = new Float32Array(particleCount * (4 + 4 + 4));
 
   for (let i = 0; i < particleCount; i++) {
     let O = i * (4 + 4 + 4) - 1;
@@ -125,253 +83,179 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
     particles[++O] = 0;
   }
 
-  const textureA = gl.createTexture();
-  if (!textureA) {
-    throw new Error("Failed to create texture");
-  }
+  const textureA = createDataTexture(gl, particles);
+  const textureB = createDataTexture(gl, particles);
 
-  gl.bindTexture(gl.TEXTURE_2D, textureA);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA32F,
-    particles.length / 4,
-    1,
-    0,
-    gl.RGBA,
-    gl.FLOAT,
-    particles
-  );
-
-  const textureB = gl.createTexture();
-  if (!textureB) {
-    throw new Error("Failed to create texture");
-  }
-
-  gl.bindTexture(gl.TEXTURE_2D, textureB);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA32F,
-    particles.length / 4,
-    1,
-    0,
-    gl.RGBA,
-    gl.FLOAT,
-    particles
-  );
-
-  const buffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.bufferData(
-    gl.ARRAY_BUFFER,
-    new Float32Array([
-      -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0,
-    ]),
-    gl.STATIC_DRAW
-  );
-
-  const vertexShader = createShader(
+  const program = createFragmentProgram(
     gl,
-    gl.VERTEX_SHADER,
     `#version 300 es
-      in vec2 a_position;
+        
+      uniform sampler2D particles;
+      uniform highp float pressed;
+      uniform highp float mx;
+      uniform highp float my;
+      out highp vec4 fragColor;
+
+      const highp int particleCount = ${PARTICLE_COUNT};
+
+
+      highp vec4 getTransform(int index) {
+        return texelFetch(particles, ivec2(index + 0, 0), 0);
+      }
+      highp vec4 getColor(int index) {
+        return texelFetch(particles, ivec2(index + 1, 0), 0);
+      }
+      highp vec4 getProperties(int index) {
+        return texelFetch(particles, ivec2(index + 2, 0), 0);
+      }
+
+
+      highp float particleDistance(highp float dx, highp float dy) {
+        highp float linear = sqrt((dx * dx + dy * dy) / 8.0);
+      
+        highp float attractionForce = pow(linear, 0.2) - 1.0;
+        highp float stiffness = 3000.0;
+        const highp float radius = 2.0;
+        highp float repulsionForce = pow(-linear + 1.0, (1.0 / radius) * 200.0);
+        return attractionForce * 2.5 + repulsionForce * stiffness;
+      }
+      
+
+      void updateTransform() {
+        int INDEX = int(gl_FragCoord.x);
+
+        highp float x = getTransform(INDEX).x;
+        highp float y = getTransform(INDEX).y;
+        highp float vx = getTransform(INDEX).z;
+        highp float vy = getTransform(INDEX).w;
+
+        highp float r = getColor(INDEX).r;
+        highp float g = getColor(INDEX).g;
+        highp float b = getColor(INDEX).b;
+
+        highp float gravity = getProperties(INDEX).x;
+        highp float radius = getProperties(INDEX).y;
+
+        highp float friction = 0.96;
+        highp float heat = 0.0001;
+
+        const bool wrapAround = true;
+
+        for (int i = 0; i < particleCount; i++) {
+          highp float x2 = getTransform(i).x;
+          highp float y2 = getTransform(i).y;
+
+          highp float otherR = getColor(i).r;
+          highp float otherG = getColor(i).g;
+          highp float otherB = getColor(i).b;
+
+          highp float dx = x - x2;
+          highp float dy = y - y2;
+
+          highp float d = particleDistance(dx, dy) * gravity;
+
+          highp float colorDistance = sqrt(
+            pow(r - otherR, 2.0) +
+              pow(g - otherG, 2.0) +
+              pow(b - otherB, 2.0)
+          );
+
+          colorDistance *= 2.0;
+
+          vx += dx * d * colorDistance;
+          vy += dy * d * colorDistance;
+        }
+
+        if (pressed != 0.0) {
+          highp float  dx = x - mx;
+          highp float dy = y - my;
+
+          highp float d = particleDistance(dx, dy) * pressed * 0.01;
+
+          highp float distance = sqrt(dx * dx + dy * dy);
+          if (distance > 0.0) {
+            dx /= distance;
+            dy /= distance;
+          }
+
+          vx += dx * d;
+          vy += dy * d;
+        }
+
+        vx *= friction;
+        vy *= friction;
+
+        //vx += (Math.random() * 2 - 1) * heat;
+        //vy += (Math.random() * 2 - 1) * heat;
+
+        x += vx;
+        y += vy;
+
+        // wall bounce
+        if (wrapAround) {
+          if (x > 1.0) {
+            x = -1.0;
+          } else if (x < -1.0) {
+            x = 1.0;
+          }
+
+          if (y >= 1.0) {
+            y = -1.0;
+          } else if (y < -1.0) {
+            y = 1.0;
+          }
+        } else {
+          if (x > 1.0) {
+            x = 1.0;
+            vx *= -1.0;
+          } else if (x < -1.0) {
+            x = -1.0;
+            vx *= -1.0;
+          }
+
+          if (y > 1.0) {
+            y = 1.0;
+            vy *= -1.0;
+          } else if (y < -1.0) {
+            y = -1.0;
+            vy *= -1.0;
+          }
+        }
+
+        int mode = int(gl_FragCoord.x)%3;
+
+        fragColor = vec4(x, y, vx, vy);
+      }
+
       void main() {
-        gl_Position = vec4(a_position, 0, 1);
+        int INDEX = int(gl_FragCoord.x);
+
+        highp float x = getTransform(INDEX).x;
+        highp float y = getTransform(INDEX).y;
+        highp float vx = getTransform(INDEX).z;
+        highp float vy = getTransform(INDEX).w;
+
+        highp float r = getColor(INDEX).r;
+        highp float g = getColor(INDEX).g;
+        highp float b = getColor(INDEX).b;
+
+        highp float gravity = getProperties(INDEX).x;
+        highp float radius = getProperties(INDEX).y;
+
+        int mode = int(gl_FragCoord.x)%3;
+
+        if (mode == 0) {
+          updateTransform();
+        } else if (mode == 1) {
+          fragColor = getTransform(INDEX);
+        } else {
+          fragColor = getTransform(INDEX);
+        }
       }
     `
   );
-  const updateShader = createShader(
-    gl,
-    gl.FRAGMENT_SHADER,
-    `#version 300 es
-    
-    uniform sampler2D particles;
-    uniform highp float pressed;
-    uniform highp float mx;
-    uniform highp float my;
-    out highp vec4 fragColor;
-
-    const highp int particleCount = ${PARTICLE_COUNT};
-
-
-    highp vec4 getTransform(int index) {
-      return texelFetch(particles, ivec2(index + 0, 0), 0);
-    }
-    highp vec4 getColor(int index) {
-      return texelFetch(particles, ivec2(index + 1, 0), 0);
-    }
-    highp vec4 getProperties(int index) {
-      return texelFetch(particles, ivec2(index + 2, 0), 0);
-    }
-
-
-    highp float particleDistance(highp float dx, highp float dy) {
-      highp float linear = sqrt((dx * dx + dy * dy) / 8.0);
-    
-      highp float attractionForce = pow(linear, 0.2) - 1.0;
-      highp float stiffness = 3000.0;
-      const highp float radius = 2.0;
-      highp float repulsionForce = pow(-linear + 1.0, (1.0 / radius) * 200.0);
-      return attractionForce * 2.5 + repulsionForce * stiffness;
-    }
-    
-
-    void updateTransform() {
-      int INDEX = int(gl_FragCoord.x);
-
-      highp float x = getTransform(INDEX).x;
-      highp float y = getTransform(INDEX).y;
-      highp float vx = getTransform(INDEX).z;
-      highp float vy = getTransform(INDEX).w;
-
-      highp float r = getColor(INDEX).r;
-      highp float g = getColor(INDEX).g;
-      highp float b = getColor(INDEX).b;
-
-      highp float gravity = getProperties(INDEX).x;
-      highp float radius = getProperties(INDEX).y;
-
-      highp float friction = 0.96;
-      highp float heat = 0.0001;
-
-      const bool wrapAround = true;
-
-      for (int i = 0; i < particleCount; i++) {
-        highp float x2 = getTransform(i).x;
-        highp float y2 = getTransform(i).y;
-
-        highp float otherR = getColor(i).r;
-        highp float otherG = getColor(i).g;
-        highp float otherB = getColor(i).b;
-
-        highp float dx = x - x2;
-        highp float dy = y - y2;
-
-        highp float d = particleDistance(dx, dy) * gravity;
-
-        highp float colorDistance = sqrt(
-          pow(r - otherR, 2.0) +
-            pow(g - otherG, 2.0) +
-            pow(b - otherB, 2.0)
-        );
-
-        colorDistance *= 2.0;
-
-        vx += dx * d * colorDistance;
-        vy += dy * d * colorDistance;
-      }
-
-      if (pressed != 0.0) {
-        highp float  dx = x - mx;
-        highp float dy = y - my;
-
-        highp float d = particleDistance(dx, dy) * pressed * 0.01;
-
-        highp float distance = sqrt(dx * dx + dy * dy);
-        if (distance > 0.0) {
-          dx /= distance;
-          dy /= distance;
-        }
-
-        vx += dx * d;
-        vy += dy * d;
-      }
-
-      vx *= friction;
-      vy *= friction;
-
-      //vx += (Math.random() * 2 - 1) * heat;
-      //vy += (Math.random() * 2 - 1) * heat;
-
-      x += vx;
-      y += vy;
-
-      // wall bounce
-      if (wrapAround) {
-        if (x > 1.0) {
-          x = -1.0;
-        } else if (x < -1.0) {
-          x = 1.0;
-        }
-
-        if (y >= 1.0) {
-          y = -1.0;
-        } else if (y < -1.0) {
-          y = 1.0;
-        }
-      } else {
-        if (x > 1.0) {
-          x = 1.0;
-          vx *= -1.0;
-        } else if (x < -1.0) {
-          x = -1.0;
-          vx *= -1.0;
-        }
-
-        if (y > 1.0) {
-          y = 1.0;
-          vy *= -1.0;
-        } else if (y < -1.0) {
-          y = -1.0;
-          vy *= -1.0;
-        }
-      }
-
-      int mode = int(gl_FragCoord.x)%3;
-
-      fragColor = vec4(x, y, vx, vy);
-    }
-
-    void main() {
-      int INDEX = int(gl_FragCoord.x);
-
-      highp float x = getTransform(INDEX).x;
-      highp float y = getTransform(INDEX).y;
-      highp float vx = getTransform(INDEX).z;
-      highp float vy = getTransform(INDEX).w;
-
-      highp float r = getColor(INDEX).r;
-      highp float g = getColor(INDEX).g;
-      highp float b = getColor(INDEX).b;
-
-      highp float gravity = getProperties(INDEX).x;
-      highp float radius = getProperties(INDEX).y;
-
-      int mode = int(gl_FragCoord.x)%3;
-
-      if (mode == 0) {
-        updateTransform();
-      } else if (mode == 1) {
-        fragColor = getTransform(INDEX);
-      } else {
-        fragColor = getTransform(INDEX);
-      }
-    }
-  `
-  );
-
-  const program = gl.createProgram();
-  if (!program) {
-    throw new Error("Failed to create program");
-  }
-
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, updateShader);
-  gl.linkProgram(program);
 
   const samplerLocation = gl.getUniformLocation(program, "particles");
-  const positionLocation = gl.getAttribLocation(program, "a_position");
-  gl.enableVertexAttribArray(positionLocation);
-  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
   const fb = gl.createFramebuffer();
   let i = 0;
@@ -381,16 +265,20 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
     update(mx: number, my: number, pressed: number) {
       gl.useProgram(program);
 
+      const writeTexture = i % 2 == 0 ? textureA : textureB;
+      const readTexture = i % 2 == 0 ? textureB : textureA;
+
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, i % 2 == 0 ? textureA : textureB);
+      gl.bindTexture(gl.TEXTURE_2D, readTexture);
       gl.uniform1i(samplerLocation, 0);
+
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
 
       gl.framebufferTexture2D(
         gl.FRAMEBUFFER,
         gl.COLOR_ATTACHMENT0,
         gl.TEXTURE_2D,
-        i % 2 == 0 ? textureB : textureA,
+        writeTexture,
         0
       );
 
@@ -398,10 +286,10 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-      this.texture = i % 2 == 0 ? textureB : textureA;
+      this.texture = writeTexture;
 
       i++;
-      //console.log(JSON.stringify(this.getParticleState(1), null, 2));
+      //console.log(JSON.stringify(this.getParticleState(190), null, 2));
     },
     getParticleState(index: number) {
       const fb = gl.createFramebuffer();
@@ -486,30 +374,8 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
     let particles = createParticles(gl, PARTICLE_COUNT);
     let destroyed = false;
 
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array([
-        -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0,
-      ]),
-      gl.STATIC_DRAW
-    );
-
-    const vertexShader = createShader(
+    const program = createFragmentProgram(
       gl,
-      gl.VERTEX_SHADER,
-      `#version 300 es
-        in vec2 a_position;
-        void main() {
-          gl_Position = vec4(a_position, 0, 1);
-        }
-      `
-    );
-
-    const fragmentShader = createShader(
-      gl,
-      gl.FRAGMENT_SHADER,
       `#version 300 es
         uniform sampler2D particles;
         out highp vec4 fragColor;
@@ -564,31 +430,22 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
       `
     );
 
-    const program = gl.createProgram();
-    if (!program) {
-      throw new Error("Failed to create program");
-    }
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-
-    const samplerLocation = gl.getUniformLocation(program, "uSampler");
-    const positionLocation = gl.getAttribLocation(program, "a_position");
-    gl.enableVertexAttribArray(positionLocation);
-    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+    const samplerLocation = gl.getUniformLocation(program, "particles");
 
     // prettier-ignore
     const tick = () => {
       if (destroyed) return;
+      
+      particles.update(mx, my, pressed)
 
-      particles.update(mx, my, pressed) 
-
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      
+      gl.useProgram(program);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, particles.texture);
       gl.uniform1i(samplerLocation, 0);
-      gl.useProgram(program);
-
       gl.drawArrays(gl.TRIANGLES, 0, 6);
+
       requestAnimationFrame(tick);
     };
     tick();
