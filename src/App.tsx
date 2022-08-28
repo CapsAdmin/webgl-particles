@@ -12,6 +12,8 @@ import {
 } from "recharts";
 import "./App.css";
 
+const PARTICLE_COUNT = 500;
+
 type Pixels = Array<number>;
 type Transforms = Array<[number, number, number, number]>;
 type Colors = Array<[number, number, number]>;
@@ -27,9 +29,10 @@ function particleDistance(dx: number, dy: number) {
 
   //return Math.sin(-Math.pow(linear * 2, 0.4) * Math.PI);
   let attractionForce = Math.pow(linear, 0.2) - 1;
-
-  let repulsionForce = Math.pow(-linear + 1, 20);
-  return (attractionForce + repulsionForce) * 3.5;
+  let stiffness = 3000;
+  const radius = 2;
+  let repulsionForce = Math.pow(-linear + 1, (1 / radius) * 200);
+  return attractionForce * 2.5 + repulsionForce * stiffness;
 }
 
 const createParticles = (gpu: GPU, particleCount: number) => {
@@ -43,7 +46,7 @@ const createParticles = (gpu: GPU, particleCount: number) => {
         return [1, -1, 0, 0];
       }
 
-      return [Math.random(), Math.random(), 0, 0]; // x, y, vx, vy
+      return [Math.random() * 2 - 1, Math.random() * 2 - 1, 0, 0]; // x, y, vx, vy
     },
     {
       output: [particleCount],
@@ -67,7 +70,7 @@ const createParticles = (gpu: GPU, particleCount: number) => {
 
   const properties = gpu.createKernel(
     function () {
-      return [0.01, 0.0001]; // attractiveness, radius
+      return [0.00002, 0.0001]; // attractiveness, radius
     },
     { output: [particleCount], ...kernelSettings }
   )();
@@ -80,10 +83,10 @@ const createParticles = (gpu: GPU, particleCount: number) => {
       let [x, y, vx, vy] = transforms[this.thread.x];
       let [r, g, b] = colors[this.thread.x];
       let [gravity, radius] = properties[this.thread.x];
-      let friction = 0.99;
-      let heat = 0.0;
+      let friction = 0.96;
+      let heat = 0.0001;
 
-      const wrapAround = false;
+      const wrapAround = true;
 
       for (let i = 0; i < particleCount; i++) {
         if (this.thread.x !== i) {
@@ -95,8 +98,16 @@ const createParticles = (gpu: GPU, particleCount: number) => {
 
           let d = particleDistance(dx, dy) * gravity;
 
-          vx += dx * d;
-          vy += dy * d;
+          let colorDistance = Math.sqrt(
+            Math.pow(r - otherR, 2) +
+              Math.pow(g - otherG, 2) +
+              Math.pow(b - otherB, 2)
+          );
+
+          colorDistance *= 2;
+
+          vx += dx * d * colorDistance;
+          vy += dy * d * colorDistance;
         }
       }
 
@@ -104,7 +115,7 @@ const createParticles = (gpu: GPU, particleCount: number) => {
         let dx = x - mx;
         let dy = y - my;
 
-        let d = particleDistance(dx, dy) * pressed * 0.1;
+        let d = particleDistance(dx, dy) * pressed * 0.01;
 
         let distance = Math.sqrt(dx * dx + dy * dy);
         if (distance > 0) {
@@ -216,8 +227,8 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
     if (!canvas) return;
     const gpu = new GPU({ canvas: canvas, mode: "gpu" });
 
-    const width = 64;
-    const height = 64;
+    const width = 1024;
+    const height = 1024;
 
     let render = gpu.createKernel<
       [Transforms, Colors, number],
@@ -232,23 +243,27 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
         let sumB = 0;
 
         for (let i = 0; i < particleCount; i++) {
-          let [x, y] = transforms[i];
-          let [pr, pg, pb] = colors[i];
+          if (this.thread.x !== i) {
+            let [x, y] = transforms[i];
+            let [pr, pg, pb] = colors[i];
 
-          x = x * 0.5 + 0.5;
-          y = y * 0.5 + 0.5;
+            x = x * 0.5 + 0.5;
+            y = y * 0.5 + 0.5;
 
-          x *= width;
-          y *= height;
+            x *= width;
+            y *= height;
 
-          let dx = x - this.thread.x;
-          let dy = y - this.thread.y;
+            let dx = x - this.thread.x;
+            let dy = y - this.thread.y;
 
-          let sum = 1 / Math.sqrt(dx * dx + dy * dy);
-
-          sumR += pr * sum;
-          sumG += pg * sum;
-          sumB += pb * sum;
+            let d = Math.sqrt(dx * dx + dy * dy);
+            if (d > 0) {
+              d = Math.pow(d, 2);
+              sumR += pr / d;
+              sumG += pg / d;
+              sumB += pb / d;
+            }
+          }
         }
 
         this.color(sumR, sumG, sumB, 1);
@@ -293,7 +308,7 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
     };
     window.addEventListener("mouseup", mouseUp);
 
-    let particles = createParticles(gpu, 3);
+    let particles = createParticles(gpu, PARTICLE_COUNT);
     let destroyed = false;
 
     // prettier-ignore
@@ -358,7 +373,7 @@ function App() {
           <LineChart width={500} height={500} data={chartData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="name" />
-            <YAxis domain={[-2, 2]} />
+            <YAxis />
             <Tooltip />
             <Legend />
 
