@@ -1,92 +1,188 @@
-import React, { useEffect, useRef, useState } from "react";
-import logo from "./logo.svg";
+import { GPU, IGPUKernelSettings } from "gpu.js";
+import { useEffect, useState } from "react";
 import "./App.css";
-import { GPU } from "gpu.js";
-import { render } from "@testing-library/react";
 
-const defaultConfig = {
-  green: {
-    number: 1000,
-    greenXgreen: 180,
-    greenXred: 180,
-    greenXwhite: 180,
-    greenXblue: 180,
-    gXg: 80,
-    gXr: 80,
-    gXw: 80,
-    gXb: 80,
-  },
-  red: {
-    number: 1000,
-    redXred: 180,
-    redXgreen: 180,
-    redXwhite: 180,
-    redXblue: 180,
-    rXg: 80,
-    rXr: 80,
-    rXw: 80,
-    rXb: 80,
-  },
-  white: {
-    number: 1000,
-    whiteXwhite: 180,
-    whiteXred: 180,
-    whiteXgreen: 180,
-    whiteXblue: 180,
-    wXg: 80,
-    wXr: 80,
-    wXw: 80,
-    wXb: 80,
-  },
-  blue: {
-    number: 1000,
-    blueXblue: 180,
-    blueXwhite: 180,
-    blueXred: 180,
-    blueXgreen: 180,
-    bXg: 80,
-    bXr: 80,
-    bXw: 80,
-    bXb: 80,
-  },
+type Pixels = Array<number>;
+type Transforms = Array<[number, number, number, number]>;
+type Colors = Array<[number, number, number, number]>;
+type Properties = Array<[number, number]>;
+
+const kernelSettings: IGPUKernelSettings = {
+  dynamicOutput: false,
+  dynamicArguments: false,
 };
 
-const useGPU = (
-  canvas: HTMLCanvasElement | null,
-  config: typeof defaultConfig
+const createParticles = (
+  gpu: GPU,
+  width: number,
+  height: number,
+  particleCount: number
 ) => {
+  const transforms = gpu.createKernel<[number, number], {}>(
+    function (width, height) {
+      let x = Math.random() * width;
+      let y = Math.random() * height;
+
+      return [x, y, 0, 0];
+    },
+    {
+      output: [particleCount],
+    }
+  )(width, height);
+
+  const colors = gpu.createKernel(
+    function () {
+      return [Math.random(), Math.random(), Math.random()];
+    },
+    { output: [particleCount], ...kernelSettings }
+  )();
+
+  const properties = gpu.createKernel(
+    function () {
+      return [-0.6, 50];
+    },
+    { output: [particleCount], ...kernelSettings }
+  )();
+
+  let stepParticles = gpu.createKernel<
+    [Transforms, Colors, Properties, number],
+    { width: number; height: number }
+  >(
+    function (transforms, colors, properties, particleCount) {
+      const width = this.constants.width;
+      const height = this.constants.height;
+
+      let [x, y, vx, vy] = transforms[this.thread.x];
+      let [r, g, b] = colors[this.thread.x];
+      let [gravity, radius] = properties[this.thread.x];
+
+      let fx = 0;
+      let fy = 0;
+
+      for (let i = 0; i < particleCount; i++) {
+        let [x2, y2] = transforms[i];
+        let [otherR, otherG, otherB] = colors[i];
+
+        let colorDistance = Math.sqrt(
+          Math.pow(r - otherR, 2) +
+            Math.pow(g - otherG, 2) +
+            Math.pow(b - otherB, 2)
+        );
+
+        colorDistance = colorDistance * 2 - 1;
+        colorDistance *= 0.1;
+        let dx = x - x2;
+        let dy = y - y2;
+        let d = Math.sqrt(dx * dx + dy * dy);
+        if (d > 0) {
+          if (d < 10) {
+            fx += -dx / d;
+            fy += -dy / d;
+          } else if (d < radius) {
+            dx = dx * -colorDistance;
+            dy = dy * -colorDistance;
+            fx += dx / d;
+            fy += dy / d;
+          }
+        }
+      }
+
+      vx = (vx + fx * gravity) * 0.88;
+      vy = (vy + fy * gravity) * 0.88;
+
+      x += vx;
+      y += vy;
+
+      x = x % width;
+      y = y % height;
+
+      return [x, y, vx, vy];
+    },
+    {
+      output: [particleCount],
+      constants: { width, height },
+      constantTypes: {
+        width: "Integer",
+        height: "Integer",
+      },
+      argumentTypes: {
+        transforms: "Array",
+        colors: "Array",
+        properties: "Array",
+        particleCount: "Integer",
+      },
+      ...kernelSettings,
+    }
+  );
+
+  let stepColors = gpu.createKernel<[Colors], {}>(
+    function (colors) {
+      let [r, g, b] = colors[this.thread.x];
+
+      return [r, g, b];
+    },
+    {
+      output: [particleCount],
+      argumentTypes: {
+        particleColors: "Array",
+      },
+      ...kernelSettings,
+    }
+  );
+
+  return {
+    count: particleCount,
+    transforms: transforms,
+    colors: colors,
+    properties: properties,
+    update() {
+      this.transforms = stepParticles(
+        this.transforms,
+        this.colors,
+        this.properties,
+        this.count
+      );
+    },
+  };
+};
+
+const useGPU = (canvas: HTMLCanvasElement | null) => {
   useEffect(() => {
     if (!canvas) return;
     const gpu = new GPU({ canvas: canvas, mode: "gpu" });
 
-    const width = 256;
-    const height = 256;
+    const width = 512;
+    const height = 512;
 
-    let renderParticles = gpu.createKernel(
-      function (
-        pixels: any,
-        particles: any,
-        particleCount: number,
-        r: number,
-        g: number,
-        b: number
-      ) {
-        const width = this.constants.width as number;
+    let render = gpu.createKernel<
+      [Pixels, Transforms, Colors, number],
+      { width: number }
+    >(
+      function (pixels, transforms, colors, particleCount) {
+        const width = this.constants.width;
 
         let sum = 0;
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let a = 0;
         for (let i = 0; i < particleCount; i++) {
-          let [x, y, vx, vy] = particles[i];
+          let [x, y] = transforms[i];
 
           let dx = x - this.thread.x;
           let dy = y - this.thread.y;
 
           let d = Math.pow(Math.sqrt(dx * dx + dy * dy), 1.5);
-          let v = 2; //Math.max(Math.sqrt(vx * vx + vy * vy), 1);
 
-          sum += v / d;
+          sum += d;
+          let [pr, pg, pb] = colors[i];
+          r = r + pr / d;
+          g = g + pg / d;
+          b = b + pb / d;
         }
 
-        sum *= 0.01;
+        sum *= 0.0001;
+        sum /= particleCount;
 
         let baseIndex = (this.thread.x + width * this.thread.y) * 4;
 
@@ -108,114 +204,17 @@ const useGPU = (
         output: [width, height],
         constants: { width, height },
         graphical: true,
-        tactic: "speed",
+        argumentTypes: {
+          pixels: "Array",
+          transforms: "Array",
+          colors: "Array",
+          particleCount: "Integer",
+        },
+        ...kernelSettings,
       }
     );
 
-    const createParticles = (particleCount: number) => {
-      const buffer = gpu.createKernel(
-        function () {
-          const width = this.constants.width as number;
-          const height = this.constants.height as number;
-
-          let x = Math.random() * width;
-          let y = Math.random() * height;
-
-          return [x, y, 0, 0];
-        },
-        { output: [particleCount], constants: { width, height } }
-      )();
-
-      let stepParticles = gpu.createKernel(
-        function (
-          particles: any,
-          otherParticles: any,
-          otherParticleCount: number,
-          gravity: number,
-          radius: number
-        ) {
-          const width = this.constants.width as number;
-          const height = this.constants.height as number;
-
-          let g = gravity * -0.00001;
-
-          let [x, y, vx, vy] = particles[this.thread.x];
-
-          let fx = 0;
-          let fy = 0;
-
-          for (let i = 0; i < otherParticleCount; i++) {
-            let [x2, y2] = otherParticles[i];
-
-            let dx = x - x2;
-            let dy = y - y2;
-            let d = Math.sqrt(dx * dx + dy * dy);
-            if (d > 0 && d < radius) {
-              fx += dx / d;
-              fy += dy / d;
-            }
-          }
-
-          vx = (vx + fx * g) * 0.999;
-          vy = (vy + fy * g) * 0.999;
-
-          x += vx;
-          y += vy;
-
-          if (x > width) x = 0;
-          if (x < 0) x = width;
-          if (y > height) y = 0;
-          if (y < 0) y = height;
-
-          return [x, y, vx, vy];
-        },
-        {
-          argumentTypes: {
-            particles: "Array",
-            otherParticles: "Array",
-            otherParticleCount: "Integer",
-            gravity: "Float",
-            radius: "Float",
-          },
-          output: [particleCount],
-          constants: { width, height },
-        }
-      );
-
-      return {
-        count: particleCount,
-        buffer: buffer,
-        step(
-          otherParticles: { buffer: any; count: number },
-          gravity: number,
-          radius: number
-        ) {
-          this.buffer = stepParticles(
-            this.buffer,
-            otherParticles.buffer,
-            otherParticles.count,
-            gravity,
-            radius
-          );
-        },
-
-        render(r: number, g: number, b: number) {
-          renderParticles(
-            renderParticles.getPixels(),
-            this.buffer,
-            particleCount,
-            r,
-            g,
-            b
-          );
-        },
-      };
-    };
-
-    let redParticles = createParticles(config.red.number);
-    let greenParticles = createParticles(config.green.number);
-    let blueParticles = createParticles(config.blue.number);
-    let whiteParticles = createParticles(config.white.number);
+    let particles = createParticles(gpu, width, height, 1000);
     let destroyed = false;
 
     // prettier-ignore
@@ -223,30 +222,13 @@ const useGPU = (
       if (destroyed) return;
 
 
-      greenParticles.step(greenParticles, config.green.greenXgreen, config.green.gXg) 
-      greenParticles.step(redParticles, config.green.greenXred, config.green.gXr) 
-      greenParticles.step(whiteParticles, config.green.greenXwhite, config.green.gXw) 
-      greenParticles.step(blueParticles, config.green.greenXblue, config.green.gXb) 
-
-      redParticles.step(redParticles, config.red.redXred, config.red.rXr) 
-      redParticles.step(greenParticles, config.red.redXgreen, config.red.rXg) 
-      redParticles.step(whiteParticles, config.red.redXwhite, config.red.rXw) 
-      redParticles.step(blueParticles, config.red.redXblue, config.red.rXb) 
-
-      whiteParticles.step(whiteParticles, config.white.whiteXwhite, config.white.wXw) 
-      whiteParticles.step(greenParticles, config.white.whiteXgreen, config.white.wXg) 
-      whiteParticles.step(redParticles, config.white.whiteXred, config.white.wXr) 
-      whiteParticles.step(blueParticles, config.white.whiteXblue, config.white.wXb) 
-      
-      blueParticles.step(blueParticles, config.blue.blueXblue, config.blue.bXb) 
-      blueParticles.step(greenParticles, config.blue.blueXgreen, config.blue.bXg) 
-      blueParticles.step(redParticles, config.blue.blueXred, config.blue.bXr) 
-      blueParticles.step(whiteParticles, config.blue.blueXwhite, config.blue.bXw) 
-
-      redParticles.render(1, 0, 0);
-      blueParticles.render(0, 0, 1);
-      greenParticles.render(0, 1, 0);
-      whiteParticles.render(1, 1, 1);
+      particles.update() 
+      render(
+        render.getPixels(),
+        particles.transforms,
+        particles.colors,
+        particles.count
+      );
       
       requestAnimationFrame(tick);
     };
@@ -256,40 +238,14 @@ const useGPU = (
       destroyed = true;
       gpu.destroy();
     };
-  }, [canvas, config]);
-};
-
-const Slider = (props: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (value: number) => void;
-}) => {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between" }}>
-      <span style={{ maxWidth: 10 }}>{props.label}</span>
-      <input
-        style={{ width: 350 }}
-        type="range"
-        value={props.value}
-        min={props.min}
-        max={props.max}
-        step={props.step}
-        onChange={(e) => props.onChange(parseFloat(e.target.value))}
-      />
-      <span>{props.value}</span>
-    </div>
-  );
+  }, [canvas]);
 };
 
 function App() {
-  const [config, setConfig] = useState(defaultConfig);
   const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(
     null
   );
-  useGPU(canvasElement, config);
+  useGPU(canvasElement);
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       <canvas
@@ -298,55 +254,10 @@ function App() {
         }}
         style={{
           flex: 1,
+          minWidth: 512,
+          minHeight: 512,
         }}
       />
-
-      {Object.entries(config).map(([type, cfg]) => {
-        return (
-          <div key={type}>
-            <h2>{type}</h2>
-            {Object.entries(cfg).map(([key, value]) => {
-              let min = 0;
-              let max = 100;
-
-              if (key === "number") {
-                min = 0;
-                max = 3000;
-              } else {
-                if (key.length == 3) {
-                  min = -100;
-                  max = 100;
-                } else {
-                  min = 10;
-                  max = 500;
-                }
-              }
-
-              return (
-                <Slider
-                  key={key}
-                  label={key}
-                  value={value}
-                  min={min}
-                  max={max}
-                  step={0.1}
-                  onChange={(value) => {
-                    setConfig((config) => {
-                      return {
-                        ...config,
-                        [type]: {
-                          ...config[type as keyof typeof config],
-                          [key]: value,
-                        },
-                      };
-                    });
-                  }}
-                />
-              );
-            })}
-          </div>
-        );
-      })}
     </div>
   );
 }
