@@ -12,12 +12,32 @@ import {
 } from "recharts";
 import "./App.css";
 
-const PARTICLE_COUNT = 500;
+const PARTICLE_COUNT = 1000;
 
-type Pixels = Array<number>;
-type Transforms = Array<[number, number, number, number]>;
-type Colors = Array<[number, number, number]>;
-type Properties = Array<[number, number]>;
+const createShader = (
+  gl: WebGL2RenderingContext,
+  type: number,
+  source: string
+) => {
+  const shader = gl.createShader(type);
+  if (!shader) {
+    throw new Error("Failed to create shader");
+  }
+
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  const compiled = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+  if (!compiled) {
+    console.error(source);
+    let i = 1;
+    for (const line of source.split("\n")) {
+      console.log(i, line);
+      i++;
+    }
+    throw new Error(gl.getShaderInfoLog(shader) || "unknown error");
+  }
+  return shader;
+};
 
 const kernelSettings: IGPUKernelSettings = {
   dynamicOutput: false,
@@ -35,90 +55,229 @@ function particleDistance(dx: number, dy: number) {
   return attractionForce * 2.5 + repulsionForce * stiffness;
 }
 
-const createParticles = (gpu: GPU, particleCount: number) => {
-  const transforms = gpu.createKernel(
-    function () {
-      if (this.thread.x === 0) {
-        return [0.7, 0.5, 0, 0];
-      } else if (this.thread.x === 1) {
-        return [-0.7, 0.5, 0, 0];
-      } else if (this.thread.x === 2) {
-        return [1, -1, 0, 0];
-      }
+const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
+  gl.getExtension("EXT_color_buffer_float");
 
-      return [Math.random() * 2 - 1, Math.random() * 2 - 1, 0, 0]; // x, y, vx, vy
-    },
-    {
-      output: [particleCount],
+  const TransformSize = 4;
+  const ColorSize = 3;
+  const PropertySize = 2;
+
+  function pow2ceil(v: number) {
+    var p = 2;
+    while ((v >>= 1)) {
+      p <<= 1;
     }
-  )();
+    return p;
+  }
 
-  const colors = gpu.createKernel(
-    function () {
-      if (this.thread.x === 0) {
-        return [1, 0, 0];
-      } else if (this.thread.x === 1) {
-        return [0, 1, 0];
-      } else if (this.thread.x === 2) {
-        return [0, 0, 1];
+  const particles = new Float32Array(pow2ceil(particleCount * (4 + 4 + 4)));
+
+  for (let i = 0; i < particleCount; i++) {
+    let O = i * (4 + 4 + 4) - 1;
+
+    if (i == 0) {
+      particles[++O] = 0.7;
+      particles[++O] = 0.5;
+      particles[++O] = 0;
+      particles[++O] = 0;
+    } else if (i == 1) {
+      particles[++O] = -0.7;
+      particles[++O] = 0.5;
+      particles[++O] = 0;
+      particles[++O] = 0;
+    } else if (i == 2) {
+      particles[++O] = 1;
+      particles[++O] = -1;
+      particles[++O] = 0;
+      particles[++O] = 0;
+    } else {
+      particles[++O] = Math.random() * 2 - 1;
+      particles[++O] = Math.random() * 2 - 1;
+      particles[++O] = 0;
+      particles[++O] = 0;
+    }
+
+    if (i == 0) {
+      particles[++O] = 1;
+      particles[++O] = 0;
+      particles[++O] = 0;
+      particles[++O] = 1;
+    } else if (i == 1) {
+      particles[++O] = 0;
+      particles[++O] = 1;
+      particles[++O] = 0;
+      particles[++O] = 1;
+    } else if (i == 2) {
+      particles[++O] = 0;
+      particles[++O] = 0;
+      particles[++O] = 1;
+      particles[++O] = 1;
+    } else {
+      particles[++O] = Math.random();
+      particles[++O] = Math.random();
+      particles[++O] = Math.random();
+      particles[++O] = 1;
+    }
+
+    particles[++O] = 0.00002;
+    particles[++O] = 0.0001;
+    particles[++O] = 0;
+    particles[++O] = 0;
+  }
+
+  const textureA = gl.createTexture();
+  if (!textureA) {
+    throw new Error("Failed to create texture");
+  }
+
+  gl.bindTexture(gl.TEXTURE_2D, textureA);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGBA32F,
+    particles.length / 4,
+    1,
+    0,
+    gl.RGBA,
+    gl.FLOAT,
+    particles
+  );
+
+  const textureB = gl.createTexture();
+  if (!textureB) {
+    throw new Error("Failed to create texture");
+  }
+
+  gl.bindTexture(gl.TEXTURE_2D, textureB);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGBA32F,
+    particles.length / 4,
+    1,
+    0,
+    gl.RGBA,
+    gl.FLOAT,
+    particles
+  );
+
+  const buffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([
+      -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0,
+    ]),
+    gl.STATIC_DRAW
+  );
+
+  const vertexShader = createShader(
+    gl,
+    gl.VERTEX_SHADER,
+    `#version 300 es
+      in vec2 a_position;
+      void main() {
+        gl_Position = vec4(a_position, 0, 1);
+      }
+    `
+  );
+  const updateShader = createShader(
+    gl,
+    gl.FRAGMENT_SHADER,
+    `#version 300 es
+    
+    uniform sampler2D particles;
+    uniform highp float pressed;
+    uniform highp float mx;
+    uniform highp float my;
+    out highp vec4 fragColor;
+
+    const highp int particleCount = ${PARTICLE_COUNT};
+
+
+    highp vec4 getTransform(int index) {
+      return texelFetch(particles, ivec2(index + 0, 0), 0);
+    }
+    highp vec4 getColor(int index) {
+      return texelFetch(particles, ivec2(index + 1, 0), 0);
+    }
+    highp vec4 getProperties(int index) {
+      return texelFetch(particles, ivec2(index + 2, 0), 0);
+    }
+
+
+    highp float particleDistance(highp float dx, highp float dy) {
+      highp float linear = sqrt((dx * dx + dy * dy) / 8.0);
+    
+      highp float attractionForce = pow(linear, 0.2) - 1.0;
+      highp float stiffness = 3000.0;
+      const highp float radius = 2.0;
+      highp float repulsionForce = pow(-linear + 1.0, (1.0 / radius) * 200.0);
+      return attractionForce * 2.5 + repulsionForce * stiffness;
+    }
+    
+
+    void updateTransform() {
+      int INDEX = int(gl_FragCoord.x);
+
+      highp float x = getTransform(INDEX).x;
+      highp float y = getTransform(INDEX).y;
+      highp float vx = getTransform(INDEX).z;
+      highp float vy = getTransform(INDEX).w;
+
+      highp float r = getColor(INDEX).r;
+      highp float g = getColor(INDEX).g;
+      highp float b = getColor(INDEX).b;
+
+      highp float gravity = getProperties(INDEX).x;
+      highp float radius = getProperties(INDEX).y;
+
+      highp float friction = 0.96;
+      highp float heat = 0.0001;
+
+      const bool wrapAround = true;
+
+      for (int i = 0; i < particleCount; i++) {
+        highp float x2 = getTransform(i).x;
+        highp float y2 = getTransform(i).y;
+
+        highp float otherR = getColor(i).r;
+        highp float otherG = getColor(i).g;
+        highp float otherB = getColor(i).b;
+
+        highp float dx = x - x2;
+        highp float dy = y - y2;
+
+        highp float d = particleDistance(dx, dy) * gravity;
+
+        highp float colorDistance = sqrt(
+          pow(r - otherR, 2.0) +
+            pow(g - otherG, 2.0) +
+            pow(b - otherB, 2.0)
+        );
+
+        colorDistance *= 2.0;
+
+        vx += dx * d * colorDistance;
+        vy += dy * d * colorDistance;
       }
 
-      return [Math.random(), Math.random(), Math.random()]; // r, g, b
-    },
-    { output: [particleCount], ...kernelSettings }
-  )();
+      if (pressed != 0.0) {
+        highp float  dx = x - mx;
+        highp float dy = y - my;
 
-  const properties = gpu.createKernel(
-    function () {
-      return [0.00002, 0.0001]; // attractiveness, radius
-    },
-    { output: [particleCount], ...kernelSettings }
-  )();
+        highp float d = particleDistance(dx, dy) * pressed * 0.01;
 
-  let stepParticles = gpu.createKernel<
-    [Transforms, Colors, Properties, number, number, number, number],
-    {}
-  >(
-    function (transforms, colors, properties, particleCount, mx, my, pressed) {
-      let [x, y, vx, vy] = transforms[this.thread.x];
-      let [r, g, b] = colors[this.thread.x];
-      let [gravity, radius] = properties[this.thread.x];
-      let friction = 0.96;
-      let heat = 0.0001;
-
-      const wrapAround = true;
-
-      for (let i = 0; i < particleCount; i++) {
-        if (this.thread.x !== i) {
-          let [x2, y2] = transforms[i];
-          let [otherR, otherG, otherB] = colors[i];
-
-          let dx = x - x2;
-          let dy = y - y2;
-
-          let d = particleDistance(dx, dy) * gravity;
-
-          let colorDistance = Math.sqrt(
-            Math.pow(r - otherR, 2) +
-              Math.pow(g - otherG, 2) +
-              Math.pow(b - otherB, 2)
-          );
-
-          colorDistance *= 2;
-
-          vx += dx * d * colorDistance;
-          vy += dy * d * colorDistance;
-        }
-      }
-
-      if (pressed != 0) {
-        let dx = x - mx;
-        let dy = y - my;
-
-        let d = particleDistance(dx, dy) * pressed * 0.01;
-
-        let distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance > 0) {
+        highp float distance = sqrt(dx * dx + dy * dy);
+        if (distance > 0.0) {
           dx /= distance;
           dy /= distance;
         }
@@ -130,94 +289,157 @@ const createParticles = (gpu: GPU, particleCount: number) => {
       vx *= friction;
       vy *= friction;
 
-      vx += (Math.random() * 2 - 1) * heat;
-      vy += (Math.random() * 2 - 1) * heat;
+      //vx += (Math.random() * 2 - 1) * heat;
+      //vy += (Math.random() * 2 - 1) * heat;
 
       x += vx;
       y += vy;
 
       // wall bounce
       if (wrapAround) {
-        if (x > 1) {
-          x = -1;
-        } else if (x < -1) {
-          x = 1;
+        if (x > 1.0) {
+          x = -1.0;
+        } else if (x < -1.0) {
+          x = 1.0;
         }
 
-        if (y >= 1) {
-          y = -1;
-        } else if (y < -1) {
-          y = 1;
+        if (y >= 1.0) {
+          y = -1.0;
+        } else if (y < -1.0) {
+          y = 1.0;
         }
       } else {
-        if (x > 1) {
-          x = 1;
-          vx *= -1;
-        } else if (x < -1) {
-          x = -1;
-          vx *= -1;
+        if (x > 1.0) {
+          x = 1.0;
+          vx *= -1.0;
+        } else if (x < -1.0) {
+          x = -1.0;
+          vx *= -1.0;
         }
 
-        if (y > 1) {
-          y = 1;
-          vy *= -1;
-        } else if (y < -1) {
-          y = -1;
-          vy *= -1;
+        if (y > 1.0) {
+          y = 1.0;
+          vy *= -1.0;
+        } else if (y < -1.0) {
+          y = -1.0;
+          vy *= -1.0;
         }
       }
 
-      // wrap around
+      int mode = int(gl_FragCoord.x)%3;
 
-      return [x, y, vx, vy];
-    },
-    {
-      output: [particleCount],
-      argumentTypes: {
-        transforms: "Array",
-        colors: "Array",
-        properties: "Array",
-        particleCount: "Integer",
-        mx: "Float",
-        my: "Float",
-        pressed: "Float",
-      },
-      ...kernelSettings,
+      fragColor = vec4(x, y, vx, vy);
     }
+
+    void main() {
+      int INDEX = int(gl_FragCoord.x);
+
+      highp float x = getTransform(INDEX).x;
+      highp float y = getTransform(INDEX).y;
+      highp float vx = getTransform(INDEX).z;
+      highp float vy = getTransform(INDEX).w;
+
+      highp float r = getColor(INDEX).r;
+      highp float g = getColor(INDEX).g;
+      highp float b = getColor(INDEX).b;
+
+      highp float gravity = getProperties(INDEX).x;
+      highp float radius = getProperties(INDEX).y;
+
+      int mode = int(gl_FragCoord.x)%3;
+
+      if (mode == 0) {
+        updateTransform();
+      } else if (mode == 1) {
+        fragColor = getTransform(INDEX);
+      } else {
+        fragColor = getTransform(INDEX);
+      }
+    }
+  `
   );
 
-  stepParticles.addFunction(particleDistance);
+  const program = gl.createProgram();
+  if (!program) {
+    throw new Error("Failed to create program");
+  }
 
-  let stepColors = gpu.createKernel<[Colors], {}>(
-    function (colors) {
-      let [r, g, b] = colors[this.thread.x];
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, updateShader);
+  gl.linkProgram(program);
 
-      return [r, g, b];
-    },
-    {
-      output: [particleCount],
-      argumentTypes: {
-        particleColors: "Array",
-      },
-      ...kernelSettings,
-    }
-  );
+  const samplerLocation = gl.getUniformLocation(program, "particles");
+  const positionLocation = gl.getAttribLocation(program, "a_position");
+  gl.enableVertexAttribArray(positionLocation);
+  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
+  const fb = gl.createFramebuffer();
+  let i = 0;
   return {
     count: particleCount,
-    transforms: transforms,
-    colors: colors,
-    properties: properties,
+    texture: textureA,
     update(mx: number, my: number, pressed: number) {
-      this.transforms = stepParticles(
-        this.transforms,
-        this.colors,
-        this.properties,
-        this.count,
-        mx,
-        my,
-        pressed
+      gl.useProgram(program);
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, i % 2 == 0 ? textureA : textureB);
+      gl.uniform1i(samplerLocation, 0);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D,
+        i % 2 == 0 ? textureB : textureA,
+        0
       );
+
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+      this.texture = i % 2 == 0 ? textureB : textureA;
+
+      i++;
+      //console.log(JSON.stringify(this.getParticleState(1), null, 2));
+    },
+    getParticleState(index: number) {
+      const fb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D,
+        this.texture,
+        0
+      );
+      const canRead =
+        gl.checkFramebufferStatus(gl.FRAMEBUFFER) == gl.FRAMEBUFFER_COMPLETE;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      if (!canRead) {
+        throw new Error("Failed to read framebuffer");
+      }
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+
+      const pixels = new Float32Array(12);
+      gl.readPixels(index * 3, 0, 3, 1, gl.RGBA, gl.FLOAT, pixels);
+      let particle = {
+        x: pixels[0],
+        y: pixels[1],
+        vx: pixels[2],
+        vy: pixels[3],
+        r: pixels[4],
+        g: pixels[5],
+        b: pixels[6],
+        a: pixels[7],
+        gravity: pixels[8],
+        radius: pixels[9],
+      };
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+      return particle;
     },
   };
 };
@@ -225,61 +447,14 @@ const createParticles = (gpu: GPU, particleCount: number) => {
 const useGPU = (canvas: HTMLCanvasElement | null) => {
   useEffect(() => {
     if (!canvas) return;
-    const gpu = new GPU({ canvas: canvas, mode: "gpu" });
+    const gl = canvas.getContext("webgl2");
+    if (!gl) return;
 
-    const width = 1024;
-    const height = 1024;
-
-    let render = gpu.createKernel<
-      [Transforms, Colors, number],
-      { width: number; height: number }
-    >(
-      function (transforms, colors, particleCount) {
-        const width = this.constants.width;
-        const height = this.constants.height;
-
-        let sumR = 0;
-        let sumG = 0;
-        let sumB = 0;
-
-        for (let i = 0; i < particleCount; i++) {
-          if (this.thread.x !== i) {
-            let [x, y] = transforms[i];
-            let [pr, pg, pb] = colors[i];
-
-            x = x * 0.5 + 0.5;
-            y = y * 0.5 + 0.5;
-
-            x *= width;
-            y *= height;
-
-            let dx = x - this.thread.x;
-            let dy = y - this.thread.y;
-
-            let d = Math.sqrt(dx * dx + dy * dy);
-            if (d > 0) {
-              d = Math.pow(d, 2);
-              sumR += pr / d;
-              sumG += pg / d;
-              sumB += pb / d;
-            }
-          }
-        }
-
-        this.color(sumR, sumG, sumB, 1);
-      },
-      {
-        output: [width, height],
-        constants: { width, height },
-        graphical: true,
-        argumentTypes: {
-          transforms: "Array",
-          colors: "Array",
-          particleCount: "Integer",
-        },
-        ...kernelSettings,
-      }
-    );
+    const width = 512;
+    const height = 512;
+    canvas.width = width;
+    canvas.height = height;
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
     let mx = 0;
     let my = 0;
@@ -308,28 +483,119 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
     };
     window.addEventListener("mouseup", mouseUp);
 
-    let particles = createParticles(gpu, PARTICLE_COUNT);
+    let particles = createParticles(gl, PARTICLE_COUNT);
     let destroyed = false;
+
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([
+        -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0,
+      ]),
+      gl.STATIC_DRAW
+    );
+
+    const vertexShader = createShader(
+      gl,
+      gl.VERTEX_SHADER,
+      `#version 300 es
+        in vec2 a_position;
+        void main() {
+          gl_Position = vec4(a_position, 0, 1);
+        }
+      `
+    );
+
+    const fragmentShader = createShader(
+      gl,
+      gl.FRAGMENT_SHADER,
+      `#version 300 es
+        uniform sampler2D particles;
+        out highp vec4 fragColor;
+
+        highp vec4 getTransform(int index) {
+          return texelFetch(particles, ivec2(index + 0, 0), 0);
+        }
+        highp vec4 getColor(int index) {
+          return texelFetch(particles, ivec2(index + 1, 0), 0);
+        }
+        highp vec4 getProperties(int index) {
+          return texelFetch(particles, ivec2(index + 2, 0), 0);
+        }
+
+        void main() {
+          const highp int particleCount = ${PARTICLE_COUNT};
+          const highp float width = ${width}.0;
+          const highp float height = ${height}.0;
+
+          highp float sumR = 0.0;
+          highp float sumG = 0.0;
+          highp float sumB = 0.0;
+
+          for (int i = 0; i < particleCount; i++) {
+            highp float x = getTransform(i).x;
+            highp float y = getTransform(i).y;
+
+            highp float r = getColor(i).r;
+            highp float g = getColor(i).g;
+            highp float b = getColor(i).b;
+
+            x = x * 0.5 + 0.5;
+            y = y * 0.5 + 0.5;
+
+            x *= width;
+            y *= height;
+
+            highp float dx = x - float(gl_FragCoord.x);
+            highp float dy = y - float(gl_FragCoord.y);
+
+            highp float d = sqrt(dx * dx + dy * dy);
+            if (d > 0.0) {
+              d = pow(d, 2.0);
+              sumR += r / d;
+              sumG += g / d;
+              sumB += b / d;
+            }
+          }
+
+          fragColor = vec4(sumR, sumG, sumB, 1.0);
+        }
+      `
+    );
+
+    const program = gl.createProgram();
+    if (!program) {
+      throw new Error("Failed to create program");
+    }
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+
+    const samplerLocation = gl.getUniformLocation(program, "uSampler");
+    const positionLocation = gl.getAttribLocation(program, "a_position");
+    gl.enableVertexAttribArray(positionLocation);
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
     // prettier-ignore
     const tick = () => {
       if (destroyed) return;
 
-
       particles.update(mx, my, pressed) 
-      render(
-        particles.transforms,
-        particles.colors,
-        particles.count
-      );
-      
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, particles.texture);
+      gl.uniform1i(samplerLocation, 0);
+      gl.useProgram(program);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
       requestAnimationFrame(tick);
     };
     tick();
 
     return () => {
       destroyed = true;
-      gpu.destroy();
+      // gpu.destroy();
       window.removeEventListener("mousemove", mouseMove);
       window.removeEventListener("mousedown", mouseDown);
       window.removeEventListener("mouseup", mouseUp);
@@ -386,9 +652,9 @@ function App() {
           setCanvasElement(e);
         }}
         style={{
-          flex: 1,
-          minWidth: 512,
-          minHeight: 512,
+          backgroundColor: "purple",
+          width: 512,
+          height: 512,
         }}
       />
     </div>
