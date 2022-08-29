@@ -1,5 +1,5 @@
 
-export const createShader = (
+const createShader = (
     gl: WebGL2RenderingContext,
     type: number,
     source: string
@@ -67,7 +67,7 @@ export const createFragmentProgram = (
     return program;
 };
 
-export const createDataTexture = (gl: WebGL2RenderingContext, array: Float32Array) => {
+export const createDataTexture = (gl: WebGL2RenderingContext, array: Float32Array, width: number, height: number) => {
     const texture = gl.createTexture();
     if (!texture) {
         throw new Error("Failed to create texture");
@@ -82,8 +82,8 @@ export const createDataTexture = (gl: WebGL2RenderingContext, array: Float32Arra
         gl.TEXTURE_2D,
         0,
         gl.RGBA32F,
-        array.length / 4,
-        1,
+        width,
+        height,
         0,
         gl.RGBA,
         gl.FLOAT,

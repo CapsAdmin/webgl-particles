@@ -12,26 +12,23 @@ import {
 import "./App.css";
 import { createDataTexture, createFragmentProgram } from "./WebGLHelpers";
 
-const PARTICLE_COUNT = 200;
-
-function particleDistance(dx: number, dy: number) {
-  let linear = Math.sqrt((dx * dx + dy * dy) / 8);
-
-  //return Math.sin(-Math.pow(linear * 2, 0.4) * Math.PI);
-  let attractionForce = Math.pow(linear, 0.2) - 1;
-  let stiffness = 3000;
-  const radius = 2;
-  let repulsionForce = Math.pow(-linear + 1, (1 / radius) * 200);
-  return attractionForce * 2.5 + repulsionForce * stiffness;
-}
+const PARTICLE_COUNT = 1050;
 
 const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
   gl.getExtension("EXT_color_buffer_float");
 
-  const particles = new Float32Array(particleCount * (4 + 4 + 4));
+  const colorChannels = 4;
+  const dataRows = 3;
+
+  let textureSize = 2;
+  while (textureSize * textureSize < particleCount * dataRows) {
+    textureSize *= 2;
+  }
+
+  const particles = new Float32Array(textureSize * textureSize * colorChannels);
 
   for (let i = 0; i < particleCount; i++) {
-    let O = i * (4 + 4 + 4) - 1;
+    let O = i * (dataRows * colorChannels) - 1;
 
     if (i == 0) {
       particles[++O] = 0.7;
@@ -83,8 +80,8 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
     particles[++O] = 0;
   }
 
-  const textureA = createDataTexture(gl, particles);
-  const textureB = createDataTexture(gl, particles);
+  const textureA = createDataTexture(gl, particles, textureSize, textureSize);
+  const textureB = createDataTexture(gl, particles, textureSize, textureSize);
 
   const program = createFragmentProgram(
     gl,
@@ -98,17 +95,20 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
 
       const highp int particleCount = ${PARTICLE_COUNT};
 
+      const int textureSize = ${textureSize};
 
       highp vec4 getTransform(int index) {
-        return texelFetch(particles, ivec2(index + 0, 0), 0);
+        int idx = index * 3 + 0;
+        return texelFetch(particles, ivec2(idx%textureSize, idx/textureSize), 0);
       }
       highp vec4 getColor(int index) {
-        return texelFetch(particles, ivec2(index + 1, 0), 0);
+        int idx = index * 3 + 1;
+        return texelFetch(particles, ivec2(idx%textureSize, idx/textureSize), 0);
       }
       highp vec4 getProperties(int index) {
-        return texelFetch(particles, ivec2(index + 2, 0), 0);
+        int idx = index * 3 + 2;
+        return texelFetch(particles, ivec2(idx%textureSize, idx/textureSize), 0);
       }
-
 
       highp float particleDistance(highp float dx, highp float dy) {
         highp float linear = sqrt((dx * dx + dy * dy) / 8.0);
@@ -121,9 +121,7 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
       }
       
 
-      void updateTransform() {
-        int INDEX = int(gl_FragCoord.x);
-
+      void updateTransform(int INDEX) {
         highp float x = getTransform(INDEX).x;
         highp float y = getTransform(INDEX).y;
         highp float vx = getTransform(INDEX).z;
@@ -222,13 +220,16 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
           }
         }
 
-        int mode = int(gl_FragCoord.x)%3;
-
         fragColor = vec4(x, y, vx, vy);
       }
 
       void main() {
-        int INDEX = int(gl_FragCoord.x);
+        int INDEX = (int(gl_FragCoord.x) * textureSize + int(gl_FragCoord.y)) / 3;
+        int INDEX2 = int(gl_FragCoord.x) * textureSize + int(gl_FragCoord.y);
+
+        if (INDEX > particleCount) {
+        //  discard;
+        }
 
         highp float x = getTransform(INDEX).x;
         highp float y = getTransform(INDEX).y;
@@ -242,14 +243,14 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
         highp float gravity = getProperties(INDEX).x;
         highp float radius = getProperties(INDEX).y;
 
-        int mode = int(gl_FragCoord.x)%3;
+        int mode = INDEX2%3;
 
         if (mode == 0) {
-          updateTransform();
+          updateTransform(INDEX);
         } else if (mode == 1) {
-          fragColor = getTransform(INDEX);
+          fragColor = getColor(INDEX);
         } else {
-          fragColor = getTransform(INDEX);
+          fragColor = getProperties(INDEX);
         }
       }
     `
@@ -261,6 +262,7 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
   let i = 0;
   return {
     count: particleCount,
+    textureSize: textureSize,
     texture: textureA,
     update(mx: number, my: number, pressed: number) {
       gl.useProgram(program);
@@ -380,14 +382,19 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
         uniform sampler2D particles;
         out highp vec4 fragColor;
 
+        const int textureSize = ${particles.textureSize};
+
         highp vec4 getTransform(int index) {
-          return texelFetch(particles, ivec2(index + 0, 0), 0);
+          int idx = index * 3 + 0;
+          return texelFetch(particles, ivec2(idx%textureSize, idx/textureSize), 0);
         }
         highp vec4 getColor(int index) {
-          return texelFetch(particles, ivec2(index + 1, 0), 0);
+          int idx = index * 3 + 1;
+          return texelFetch(particles, ivec2(idx%textureSize, idx/textureSize), 0);
         }
         highp vec4 getProperties(int index) {
-          return texelFetch(particles, ivec2(index + 2, 0), 0);
+          int idx = index * 3 + 2;
+          return texelFetch(particles, ivec2(idx%textureSize, idx/textureSize), 0);
         }
 
         void main() {
@@ -459,6 +466,17 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
     };
   }, [canvas]);
 };
+
+function particleDistance(dx: number, dy: number) {
+  let linear = Math.sqrt((dx * dx + dy * dy) / 8);
+
+  //return Math.sin(-Math.pow(linear * 2, 0.4) * Math.PI);
+  let attractionForce = Math.pow(linear, 0.2) - 1;
+  let stiffness = 3000;
+  const radius = 2;
+  let repulsionForce = Math.pow(-linear + 1, (1 / radius) * 200);
+  return attractionForce * 2.5 + repulsionForce * stiffness;
+}
 
 const chartData: Array<{
   name: string;
