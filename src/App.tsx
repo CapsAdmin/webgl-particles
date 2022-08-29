@@ -166,24 +166,12 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
       }
 
       void main() {
-        int INDEX = (int(gl_FragCoord.x) * textureSize + int(gl_FragCoord.y)) / 3;
         int INDEX2 = int(gl_FragCoord.x) * textureSize + int(gl_FragCoord.y);
+        int INDEX = INDEX2 / 3;
 
         if (INDEX > particleCount) {
-        //  discard;
+          //discard;
         }
-
-        highp float x = getTransform(INDEX).x;
-        highp float y = getTransform(INDEX).y;
-        highp float vx = getTransform(INDEX).z;
-        highp float vy = getTransform(INDEX).w;
-
-        highp float r = getColor(INDEX).r;
-        highp float g = getColor(INDEX).g;
-        highp float b = getColor(INDEX).b;
-
-        highp float gravity = getProperties(INDEX).x;
-        highp float radius = getProperties(INDEX).y;
 
         int mode = INDEX2%3;
 
@@ -254,7 +242,16 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
 
       const pixels = new Float32Array(12);
-      gl.readPixels(index * 3, 0, 3, 1, gl.RGBA, gl.FLOAT, pixels);
+      let idx = index * 3 + 0;
+      gl.readPixels(
+        idx % textureSize,
+        idx / textureSize,
+        3,
+        1,
+        gl.RGBA,
+        gl.FLOAT,
+        pixels
+      );
       let particle = {
         x: pixels[0],
         y: pixels[1],
