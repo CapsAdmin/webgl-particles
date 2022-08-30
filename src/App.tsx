@@ -13,7 +13,7 @@ import "./App.css";
 import { createDataTexture, createFragmentProgram } from "./WebGLHelpers";
 import chroma from "chroma-js";
 
-const PARTICLE_COUNT = 1365;
+const PARTICLE_COUNT = 1000;
 
 const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
   gl.getExtension("EXT_color_buffer_float");
@@ -31,19 +31,20 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
   for (let i = 0; i < particleCount; i++) {
     let O = i * (dataRows * colorChannels) - 1;
 
-    particles[++O] = Math.random() * 2 - 1;
-    particles[++O] = Math.random() * 2 - 1;
+    particles[++O] = Math.sin((i / particleCount) * Math.PI * 2) / 2;
+    particles[++O] = Math.cos((i / particleCount) * Math.PI * 2) / 2;
     particles[++O] = 0;
     particles[++O] = 0;
 
-    let [r, g, b] = chroma.hsv((i / particleCount) * 360, 1, 1).gl();
+    let [r, g, b] = chroma.hsv((i / particleCount) * 360, 0.9, 1).gl();
+
     particles[++O] = r;
     particles[++O] = g;
     particles[++O] = b;
     particles[++O] = 1;
 
-    particles[++O] = 0.00002;
-    particles[++O] = 0.0001;
+    particles[++O] = 0.00001;
+    particles[++O] = 666;
     particles[++O] = 0;
     particles[++O] = 0;
   }
@@ -63,17 +64,18 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
 
       const int textureSize = ${textureSize};
 
+      highp vec4 fetchFromIndex(int index) {
+        return texelFetch(particles, ivec2(index%textureSize, index/textureSize), 0);
+      }
+
       highp vec4 getTransform(int index) {
-        int idx = index * 3 + 0;
-        return texelFetch(particles, ivec2(idx%textureSize, idx/textureSize), 0);
+        return fetchFromIndex(index * 3 + 0);
       }
       highp vec4 getColor(int index) {
-        int idx = index * 3 + 1;
-        return texelFetch(particles, ivec2(idx%textureSize, idx/textureSize), 0);
+        return fetchFromIndex(index * 3 + 1);
       }
       highp vec4 getProperties(int index) {
-        int idx = index * 3 + 2;
-        return texelFetch(particles, ivec2(idx%textureSize, idx/textureSize), 0);
+        return fetchFromIndex(index * 3 + 2);
       }
 
       highp float particleDistance(highp vec2 dir) {
@@ -85,6 +87,18 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
         highp float repulsionForce = pow(-linear + 1.0, (1.0 / radius) * 200.0);
         return attractionForce * 2.5 + repulsionForce * stiffness;
       }
+
+      highp vec3 rgb2hsv(highp vec3 c)
+      {
+        highp vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+        highp vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+        highp vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+
+          highp float d = q.x - min(q.w, q.y);
+          highp float e = 1.0e-10;
+          return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+      }
+
       
 
       void updateTransform(int INDEX) {
@@ -92,9 +106,11 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
         highp vec2 vel = getTransform(INDEX).zw;
 
         highp vec3 color = getColor(INDEX).rgb;
+        highp vec3 hsv = rgb2hsv(color);
 
-        highp float gravity = getProperties(INDEX).x;
-        highp float radius = getProperties(INDEX).y;
+        highp vec2 props = getProperties(INDEX).xy;
+        highp float gravity = props.x;
+        highp float radius = props.y;
 
         highp float friction = 0.9;
         highp float heat = 0.0001;
@@ -105,11 +121,13 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
           highp vec2 otherPos = getTransform(i).xy;
           highp vec3 otherColor = getColor(i).rgb;
           highp vec2 direction = pos - otherPos;
+          
+          highp vec3 otherHsv = rgb2hsv(otherColor);
+          highp float colorDistance = abs(hsv.x - otherHsv.x);
 
-          highp float colorDistance = (length(color - otherColor) / 3.0) * 0.5 + 0.5;
           highp float attraction = particleDistance(direction) * gravity;
 
-          vel += direction * attraction * colorDistance * 3.0;
+          vel += direction * attraction * colorDistance;
         }
 
         if (mouse.z != 0.0) {
@@ -166,21 +184,27 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
       }
 
       void main() {
-        int INDEX2 = int(gl_FragCoord.x) * textureSize + int(gl_FragCoord.y);
-        int INDEX = INDEX2 / 3;
 
-        if (INDEX > particleCount) {
-          //discard;
+        int x = int(gl_FragCoord.y);
+        int y = int(gl_FragCoord.x);
+
+        int indexRGBA = x * textureSize + y;
+        int indexParticle = indexRGBA;
+        int mode = indexRGBA%3;
+
+        indexParticle = indexParticle / 3;
+
+        if (indexParticle > particleCount) {
+          discard;
         }
 
-        int mode = INDEX2%3;
-
         if (mode == 0) {
-          updateTransform(INDEX);
+          updateTransform(indexParticle);
+          //fragColor = getTransform(indexParticle);
         } else if (mode == 1) {
-          fragColor = getColor(INDEX);
+          fragColor = getColor(indexParticle);
         } else {
-          fragColor = getProperties(INDEX);
+          fragColor = getProperties(indexParticle);
         }
       }
     `
@@ -188,6 +212,59 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
 
   const samplerLocation = gl.getUniformLocation(program, "particles");
   const mouseLocation = gl.getUniformLocation(program, "mouse");
+
+  const getParticleState = (index: number) => {
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      textureA,
+      0
+    );
+    const canRead =
+      gl.checkFramebufferStatus(gl.FRAMEBUFFER) == gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if (!canRead) {
+      throw new Error("Failed to read framebuffer");
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+
+    const transform = new Float32Array(4);
+    const color = new Float32Array(4);
+    const properties = new Float32Array(4);
+
+    const readFromIndex = (offset: number, output: Float32Array) => {
+      let idx = index * 3 + offset;
+      let x = Math.trunc(idx / textureSize);
+      let y = Math.trunc(idx % textureSize);
+      gl.readPixels(y, x, 1, 1, gl.RGBA, gl.FLOAT, output);
+    };
+
+    readFromIndex(0, transform);
+    readFromIndex(1, color);
+    readFromIndex(2, properties);
+
+    let particle = {
+      x: transform[0],
+      y: transform[1],
+      vx: transform[2],
+      vy: transform[3],
+      r: color[0],
+      g: color[1],
+      b: color[2],
+      a: color[3],
+      gravity: properties[0],
+      radius: properties[1],
+    };
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    return particle;
+  };
+  //console.log(JSON.stringify(getParticleState(3), null, 2));
 
   const fb = gl.createFramebuffer();
   let i = 0;
@@ -220,54 +297,6 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
       gl.drawArrays(gl.TRIANGLES, 0, 6);
 
       i++;
-      //console.log(JSON.stringify(this.getParticleState(190), null, 2));
-    },
-    getParticleState(index: number) {
-      const fb = gl.createFramebuffer();
-      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-      gl.framebufferTexture2D(
-        gl.FRAMEBUFFER,
-        gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D,
-        this.texture,
-        0
-      );
-      const canRead =
-        gl.checkFramebufferStatus(gl.FRAMEBUFFER) == gl.FRAMEBUFFER_COMPLETE;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      if (!canRead) {
-        throw new Error("Failed to read framebuffer");
-      }
-
-      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-
-      const pixels = new Float32Array(12);
-      let idx = index * 3 + 0;
-      gl.readPixels(
-        idx % textureSize,
-        idx / textureSize,
-        3,
-        1,
-        gl.RGBA,
-        gl.FLOAT,
-        pixels
-      );
-      let particle = {
-        x: pixels[0],
-        y: pixels[1],
-        vx: pixels[2],
-        vy: pixels[3],
-        r: pixels[4],
-        g: pixels[5],
-        b: pixels[6],
-        a: pixels[7],
-        gravity: pixels[8],
-        radius: pixels[9],
-      };
-
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-      return particle;
     },
   };
 };
@@ -278,8 +307,8 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
     const gl = canvas.getContext("webgl2");
     if (!gl) return;
 
-    const width = 1024;
-    const height = 1024;
+    const width = 512;
+    const height = 512;
     canvas.width = width;
     canvas.height = height;
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -341,16 +370,14 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
 
         void main() {
           highp vec3 sum = vec3(0.0, 0.0, 0.0);
+          highp vec2 pixelPos = vec2(float(gl_FragCoord.x - 0.5), float(gl_FragCoord.y - 0.5));
 
           for (int i = 0; i < particleCount; i++) {
 
             highp vec2 pos = getTransform(i).xy;
-
             pos = (pos * vec2(0.5) + vec2(0.5)) * vec2(width, height);
 
-            highp vec2 direction = pos - vec2(float(gl_FragCoord.x), float(gl_FragCoord.y));
-
-            highp float len = length(direction);
+            highp float len = length(pos - pixelPos);
             if (len > 0.0 && len < 3.0) {
               sum += getColor(i).rgb / pow(len, 3.0);
             }
