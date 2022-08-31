@@ -92,3 +92,47 @@ export const createDataTexture = (gl: WebGL2RenderingContext, array: Float32Arra
 
     return texture
 }
+
+
+export const createDoubleBufferTexture = (size: number, init: (i: number) => [number, number, number, number] | undefined, gl: WebGL2RenderingContext) => {
+    const data = new Float32Array(
+        size * size * 4
+    );
+    for (let i = 0; i < (size * size); i++) {
+        const arr = init(i)
+        if (!arr) {
+            break
+        }
+        let O = i * 4 - 1;
+
+        data[++O] = arr[0];
+        data[++O] = arr[1];
+        data[++O] = arr[2];
+        data[++O] = arr[3];
+    }
+
+    let read = createDataTexture(
+        gl,
+        data,
+        size,
+        size
+    );
+    let write = createDataTexture(
+        gl,
+        data,
+        size,
+        size
+    );
+
+    return {
+        getRead() {
+            return read
+        },
+        getWrite() {
+            return write
+        },
+        swap() {
+            [read, write] = [write, read];
+        }
+    }
+}

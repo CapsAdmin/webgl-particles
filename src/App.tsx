@@ -10,7 +10,11 @@ import {
   YAxis,
 } from "recharts";
 import "./App.css";
-import { createDataTexture, createFragmentProgram } from "./WebGLHelpers";
+import {
+  createDataTexture,
+  createFragmentProgram,
+  createDoubleBufferTexture,
+} from "./WebGLHelpers";
 import chroma from "chroma-js";
 
 const PARTICLE_COUNT = 1000;
@@ -18,89 +22,46 @@ const PARTICLE_COUNT = 1000;
 const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
   gl.getExtension("EXT_color_buffer_float");
 
-  const colorChannels = 4;
-
   let textureSize = 2;
   while (textureSize * textureSize < particleCount) {
     textureSize *= 2;
   }
 
-  const transformData = new Float32Array(
-    textureSize * textureSize * colorChannels
-  );
-
-  for (let i = 0; i < particleCount; i++) {
-    let O = i * colorChannels - 1;
-
-    transformData[++O] = Math.sin((i / particleCount) * Math.PI * 2) / 2;
-    transformData[++O] = Math.cos((i / particleCount) * Math.PI * 2) / 2;
-    transformData[++O] = 0;
-    transformData[++O] = 0;
-  }
-
-  const colorData = new Float32Array(textureSize * textureSize * colorChannels);
-
-  for (let i = 0; i < particleCount; i++) {
-    let O = i * colorChannels - 1;
-
-    let [r, g, b] = chroma.hsv((i / particleCount) * 360, 0.9, 1).gl();
-
-    colorData[++O] = r;
-    colorData[++O] = g;
-    colorData[++O] = b;
-    colorData[++O] = 1;
-  }
-
-  const propertyData = new Float32Array(
-    textureSize * textureSize * colorChannels
-  );
-
-  for (let i = 0; i < particleCount; i++) {
-    let O = i * colorChannels - 1;
-
-    propertyData[++O] = 0.00001;
-    propertyData[++O] = 666;
-    propertyData[++O] = 0;
-    propertyData[++O] = 0;
-  }
-
-  const textureTransformA = createDataTexture(
-    gl,
-    transformData,
+  const transformTexture = createDoubleBufferTexture(
     textureSize,
-    textureSize
-  );
-  const textureTransformB = createDataTexture(
-    gl,
-    transformData,
-    textureSize,
-    textureSize
-  );
-
-  const textureColorA = createDataTexture(
-    gl,
-    colorData,
-    textureSize,
-    textureSize
-  );
-  const textureColorB = createDataTexture(
-    gl,
-    colorData,
-    textureSize,
-    textureSize
+    (i) => {
+      if (i < particleCount) {
+        return [
+          Math.sin((i / particleCount) * Math.PI * 2) / 2,
+          Math.cos((i / particleCount) * Math.PI * 2) / 2,
+          0,
+          0,
+        ];
+      }
+    },
+    gl
   );
 
-  const texturePropertiesA = createDataTexture(
-    gl,
-    propertyData,
+  const colorTexture = createDoubleBufferTexture(
     textureSize,
-    textureSize
+    (i) => {
+      if (i < particleCount) {
+        let [r, g, b] = chroma.hsv((i / particleCount) * 360, 0.9, 1).gl();
+
+        return [r, g, b, 0];
+      }
+    },
+    gl
   );
-  const texturePropertiesB = createDataTexture(
-    gl,
-    propertyData,
+
+  const propertyTexture = createDoubleBufferTexture(
     textureSize,
-    textureSize
+    (i) => {
+      if (i < particleCount) {
+        return [0.00001, 0, 0, 0];
+      }
+    },
+    gl
   );
 
   const program = createFragmentProgram(
@@ -296,79 +257,53 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
 
     return output;
   };
-  console.log(JSON.stringify(getParticleState(1, textureTransformA), null, 2));
 
   const fb = gl.createFramebuffer();
-  let i = 0;
+
+  const textures = [
+    { texture: transformTexture, location: transformTextureLocation },
+    { texture: colorTexture, location: colorTextureLocation },
+    { texture: propertyTexture, location: propertyTextureLocation },
+  ];
+
   return {
     count: particleCount,
     textureSize: textureSize,
-    textureTransform: textureTransformA,
-    textureColor: textureColorA,
-    textureProperties: texturePropertiesA,
+    textureTransform: transformTexture.getRead(),
+    textureColor: colorTexture.getRead(),
+    textureProperties: propertyTexture.getRead(),
     update(mx: number, my: number, pressed: number) {
       gl.useProgram(program);
 
-      const writeTextureTransform =
-        i % 2 == 0 ? textureTransformA : textureTransformB;
-      const readTextureTransform =
-        i % 2 == 0 ? textureTransformB : textureTransformA;
-
-      const writeTextureColor = i % 2 == 0 ? textureColorA : textureColorB;
-      const readTextureColor = i % 2 == 0 ? textureColorB : textureColorA;
-
-      const writeTextureProperties =
-        i % 2 == 0 ? texturePropertiesA : texturePropertiesB;
-      const readTextureProperties =
-        i % 2 == 0 ? texturePropertiesB : texturePropertiesA;
-
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, readTextureTransform);
-      gl.uniform1i(transformTextureLocation, 0);
-
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, readTextureColor);
-      gl.uniform1i(colorTextureLocation, 1);
-
-      gl.activeTexture(gl.TEXTURE2);
-      gl.bindTexture(gl.TEXTURE_2D, readTextureProperties);
-      gl.uniform1i(propertyTextureLocation, 2);
+      for (let i = 0; i < textures.length; i++) {
+        gl.activeTexture(gl.TEXTURE0 + i);
+        gl.bindTexture(gl.TEXTURE_2D, textures[i].texture.getRead());
+        gl.uniform1i(textures[i].location, i);
+      }
 
       gl.uniform3f(mouseLocation, mx, my, pressed);
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
 
-      gl.framebufferTexture2D(
-        gl.FRAMEBUFFER,
-        gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D,
-        writeTextureTransform,
-        0
-      );
-
-      gl.framebufferTexture2D(
-        gl.FRAMEBUFFER,
-        gl.COLOR_ATTACHMENT1,
-        gl.TEXTURE_2D,
-        writeTextureColor,
-        0
-      );
-
-      gl.framebufferTexture2D(
-        gl.FRAMEBUFFER,
-        gl.COLOR_ATTACHMENT2,
-        gl.TEXTURE_2D,
-        writeTextureProperties,
-        0
-      );
+      for (let i = 0; i < textures.length; i++) {
+        gl.framebufferTexture2D(
+          gl.FRAMEBUFFER,
+          gl.COLOR_ATTACHMENT0 + i,
+          gl.TEXTURE_2D,
+          textures[i].texture.getWrite(),
+          0
+        );
+      }
 
       gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-      this.textureTransform = writeTextureTransform;
-      this.textureColor = writeTextureColor;
-      this.textureProperties = writeTextureProperties;
+      this.textureTransform = transformTexture.getWrite();
+      this.textureColor = colorTexture.getWrite();
+      this.textureProperties = propertyTexture.getWrite();
 
-      i++;
+      transformTexture.swap();
+      colorTexture.swap();
+      propertyTexture.swap();
     },
   };
 };
