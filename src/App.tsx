@@ -13,69 +13,126 @@ import "./App.css";
 import { createDataTexture, createFragmentProgram } from "./WebGLHelpers";
 import chroma from "chroma-js";
 
-const PARTICLE_COUNT = 1000;
+const PARTICLE_COUNT = 30000;
 
 const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
   gl.getExtension("EXT_color_buffer_float");
 
   const colorChannels = 4;
-  const dataRows = 3;
 
   let textureSize = 2;
-  while (textureSize * textureSize < particleCount * dataRows) {
+  while (textureSize * textureSize < particleCount) {
     textureSize *= 2;
   }
 
-  const particles = new Float32Array(textureSize * textureSize * colorChannels);
+  const transformData = new Float32Array(
+    textureSize * textureSize * colorChannels
+  );
 
   for (let i = 0; i < particleCount; i++) {
-    let O = i * (dataRows * colorChannels) - 1;
+    let O = i * colorChannels - 1;
 
-    particles[++O] = Math.sin((i / particleCount) * Math.PI * 2) / 2;
-    particles[++O] = Math.cos((i / particleCount) * Math.PI * 2) / 2;
-    particles[++O] = 0;
-    particles[++O] = 0;
+    transformData[++O] = Math.sin((i / particleCount) * Math.PI * 2) / 2;
+    transformData[++O] = Math.cos((i / particleCount) * Math.PI * 2) / 2;
+    transformData[++O] = 0;
+    transformData[++O] = 0;
+  }
+
+  const colorData = new Float32Array(textureSize * textureSize * colorChannels);
+
+  for (let i = 0; i < particleCount; i++) {
+    let O = i * colorChannels - 1;
 
     let [r, g, b] = chroma.hsv((i / particleCount) * 360, 0.9, 1).gl();
 
-    particles[++O] = r;
-    particles[++O] = g;
-    particles[++O] = b;
-    particles[++O] = 1;
-
-    particles[++O] = 0.00001;
-    particles[++O] = 666;
-    particles[++O] = 0;
-    particles[++O] = 0;
+    colorData[++O] = r;
+    colorData[++O] = g;
+    colorData[++O] = b;
+    colorData[++O] = 1;
   }
 
-  const textureA = createDataTexture(gl, particles, textureSize, textureSize);
-  const textureB = createDataTexture(gl, particles, textureSize, textureSize);
+  const propertyData = new Float32Array(
+    textureSize * textureSize * colorChannels
+  );
+
+  for (let i = 0; i < particleCount; i++) {
+    let O = i * colorChannels - 1;
+
+    propertyData[++O] = 0.00001;
+    propertyData[++O] = 666;
+    propertyData[++O] = 0;
+    propertyData[++O] = 0;
+  }
+
+  const textureTransformA = createDataTexture(
+    gl,
+    transformData,
+    textureSize,
+    textureSize
+  );
+  const textureTransformB = createDataTexture(
+    gl,
+    transformData,
+    textureSize,
+    textureSize
+  );
+
+  const textureColorA = createDataTexture(
+    gl,
+    colorData,
+    textureSize,
+    textureSize
+  );
+  const textureColorB = createDataTexture(
+    gl,
+    colorData,
+    textureSize,
+    textureSize
+  );
+
+  const texturePropertiesA = createDataTexture(
+    gl,
+    propertyData,
+    textureSize,
+    textureSize
+  );
+  const texturePropertiesB = createDataTexture(
+    gl,
+    propertyData,
+    textureSize,
+    textureSize
+  );
 
   const program = createFragmentProgram(
     gl,
     `#version 300 es
-        
-      uniform sampler2D particles;
+    
       uniform highp vec3 mouse;
-      out highp vec4 fragColor;
+
+      uniform sampler2D transformTexture;
+      uniform sampler2D colorTexture;
+      uniform sampler2D propertyTexture;
+          
+      layout(location=0) out highp vec4 transformOut;
+      layout(location=1) out highp vec4 colorOut;
+      layout(location=2) out highp vec4 propertyOut;
 
       const highp int particleCount = ${PARTICLE_COUNT};
 
       const int textureSize = ${textureSize};
 
-      highp vec4 fetchFromIndex(int index) {
-        return texelFetch(particles, ivec2(index%textureSize, index/textureSize), 0);
+      highp vec4 fetchFromIndex(sampler2D texture, int index) {
+        return texelFetch(texture, ivec2(index%textureSize, index/textureSize), 0);
       }
 
       highp vec4 getTransform(int index) {
-        return fetchFromIndex(index * 3 + 0);
+        return fetchFromIndex(transformTexture, index);
       }
       highp vec4 getColor(int index) {
-        return fetchFromIndex(index * 3 + 1);
+        return fetchFromIndex(colorTexture, index);
       }
       highp vec4 getProperties(int index) {
-        return fetchFromIndex(index * 3 + 2);
+        return fetchFromIndex(propertyTexture, index);
       }
 
       highp float particleDistance(highp vec2 dir) {
@@ -99,9 +156,7 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
           return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
       }
 
-      
-
-      void updateTransform(int INDEX) {
+      highp vec4 updateTransform(int INDEX) {
         highp vec2 pos = getTransform(INDEX).xy;
         highp vec2 vel = getTransform(INDEX).zw;
 
@@ -180,47 +235,45 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
           }
         }
 
-        fragColor = vec4(pos, vel);
+        return vec4(pos, vel);
       }
 
       void main() {
-
         int x = int(gl_FragCoord.y);
         int y = int(gl_FragCoord.x);
 
-        int indexRGBA = x * textureSize + y;
-        int indexParticle = indexRGBA;
-        int mode = indexRGBA%3;
-
-        indexParticle = indexParticle / 3;
-
+        int indexParticle = x * textureSize + y;
         if (indexParticle > particleCount) {
           discard;
         }
 
-        if (mode == 0) {
-          updateTransform(indexParticle);
-          //fragColor = getTransform(indexParticle);
-        } else if (mode == 1) {
-          fragColor = getColor(indexParticle);
-        } else {
-          fragColor = getProperties(indexParticle);
-        }
+        transformOut = updateTransform(indexParticle);
+        colorOut = getColor(indexParticle);
+        propertyOut = getProperties(indexParticle);
       }
     `
   );
 
-  const samplerLocation = gl.getUniformLocation(program, "particles");
+  const transformTextureLocation = gl.getUniformLocation(
+    program,
+    "transformTexture"
+  );
+  const colorTextureLocation = gl.getUniformLocation(program, "colorTexture");
+  const propertyTextureLocation = gl.getUniformLocation(
+    program,
+    "propertyTexture"
+  );
+
   const mouseLocation = gl.getUniformLocation(program, "mouse");
 
-  const getParticleState = (index: number) => {
+  const getParticleState = (index: number, tex: WebGLTexture) => {
     const fb = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.framebufferTexture2D(
       gl.FRAMEBUFFER,
       gl.COLOR_ATTACHMENT0,
       gl.TEXTURE_2D,
-      textureA,
+      tex,
       0
     );
     const canRead =
@@ -232,55 +285,54 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
 
-    const transform = new Float32Array(4);
-    const color = new Float32Array(4);
-    const properties = new Float32Array(4);
+    const output = new Float32Array(4);
 
-    const readFromIndex = (offset: number, output: Float32Array) => {
-      let idx = index * 3 + offset;
-      let x = Math.trunc(idx / textureSize);
-      let y = Math.trunc(idx % textureSize);
-      gl.readPixels(y, x, 1, 1, gl.RGBA, gl.FLOAT, output);
-    };
-
-    readFromIndex(0, transform);
-    readFromIndex(1, color);
-    readFromIndex(2, properties);
-
-    let particle = {
-      x: transform[0],
-      y: transform[1],
-      vx: transform[2],
-      vy: transform[3],
-      r: color[0],
-      g: color[1],
-      b: color[2],
-      a: color[3],
-      gravity: properties[0],
-      radius: properties[1],
-    };
+    let idx = index;
+    let x = Math.trunc(idx / textureSize);
+    let y = Math.trunc(idx % textureSize);
+    gl.readPixels(y, x, 1, 1, gl.RGBA, gl.FLOAT, output);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-    return particle;
+    return output;
   };
-  //console.log(JSON.stringify(getParticleState(3), null, 2));
+  console.log(JSON.stringify(getParticleState(1, textureTransformA), null, 2));
 
   const fb = gl.createFramebuffer();
   let i = 0;
   return {
     count: particleCount,
     textureSize: textureSize,
-    texture: textureA,
+    textureTransform: textureTransformA,
+    textureColor: textureColorA,
+    textureProperties: texturePropertiesA,
     update(mx: number, my: number, pressed: number) {
       gl.useProgram(program);
 
-      const writeTexture = i % 2 == 0 ? textureA : textureB;
-      const readTexture = i % 2 == 0 ? textureB : textureA;
+      const writeTextureTransform =
+        i % 2 == 0 ? textureTransformA : textureTransformB;
+      const readTextureTransform =
+        i % 2 == 0 ? textureTransformB : textureTransformA;
+
+      const writeTextureColor = i % 2 == 0 ? textureColorA : textureColorB;
+      const readTextureColor = i % 2 == 0 ? textureColorB : textureColorA;
+
+      const writeTextureProperties =
+        i % 2 == 0 ? texturePropertiesA : texturePropertiesB;
+      const readTextureProperties =
+        i % 2 == 0 ? texturePropertiesB : texturePropertiesA;
 
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, readTexture);
-      gl.uniform1i(samplerLocation, 0);
+      gl.bindTexture(gl.TEXTURE_2D, readTextureTransform);
+      gl.uniform1i(transformTextureLocation, 0);
+
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, readTextureColor);
+      gl.uniform1i(colorTextureLocation, 1);
+
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, readTextureProperties);
+      gl.uniform1i(propertyTextureLocation, 2);
 
       gl.uniform3f(mouseLocation, mx, my, pressed);
 
@@ -290,7 +342,23 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
         gl.FRAMEBUFFER,
         gl.COLOR_ATTACHMENT0,
         gl.TEXTURE_2D,
-        writeTexture,
+        writeTextureTransform,
+        0
+      );
+
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT1,
+        gl.TEXTURE_2D,
+        writeTextureColor,
+        0
+      );
+
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT2,
+        gl.TEXTURE_2D,
+        writeTextureProperties,
         0
       );
 
@@ -346,22 +414,21 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
     const program = createFragmentProgram(
       gl,
       `#version 300 es
-        uniform sampler2D particles;
+        uniform sampler2D textureTransform;
+        uniform sampler2D textureColor;
+        uniform sampler2D textureProperties;
         out highp vec4 fragColor;
 
         const int textureSize = ${particles.textureSize};
 
         highp vec4 getTransform(int index) {
-          int idx = index * 3 + 0;
-          return texelFetch(particles, ivec2(idx%textureSize, idx/textureSize), 0);
+          return texelFetch(textureTransform, ivec2(index%textureSize, index/textureSize), 0);
         }
         highp vec4 getColor(int index) {
-          int idx = index * 3 + 1;
-          return texelFetch(particles, ivec2(idx%textureSize, idx/textureSize), 0);
+          return texelFetch(textureColor, ivec2(index%textureSize, index/textureSize), 0);
         }
         highp vec4 getProperties(int index) {
-          int idx = index * 3 + 2;
-          return texelFetch(particles, ivec2(idx%textureSize, idx/textureSize), 0);
+          return texelFetch(textureProperties, ivec2(index%textureSize, index/textureSize), 0);
         }
 
         const highp int particleCount = ${PARTICLE_COUNT};
@@ -388,7 +455,15 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
       `
     );
 
-    const samplerLocation = gl.getUniformLocation(program, "particles");
+    const transformLocation = gl.getUniformLocation(
+      program,
+      "textureTransform"
+    );
+    const colorLocation = gl.getUniformLocation(program, "textureColor");
+    const propertyLocation = gl.getUniformLocation(
+      program,
+      "textureProperties"
+    );
 
     const tick = () => {
       if (destroyed) return;
@@ -399,9 +474,19 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
       gl.useProgram(program);
+
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, particles.texture);
-      gl.uniform1i(samplerLocation, 0);
+      gl.bindTexture(gl.TEXTURE_2D, particles.textureTransform);
+      gl.uniform1i(transformLocation, 0);
+
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, particles.textureColor);
+      gl.uniform1i(colorLocation, 1);
+
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, particles.textureProperties);
+      gl.uniform1i(propertyLocation, 2);
+
       gl.drawArrays(gl.TRIANGLES, 0, 6);
 
       requestAnimationFrame(tick);
