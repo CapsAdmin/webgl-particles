@@ -13,7 +13,7 @@ import "./App.css";
 import { createDataTexture, createFragmentProgram } from "./WebGLHelpers";
 import chroma from "chroma-js";
 
-const PARTICLE_COUNT = 30000;
+const PARTICLE_COUNT = 1000;
 
 const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
   gl.getExtension("EXT_color_buffer_float");
@@ -364,6 +364,10 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
 
       gl.drawArrays(gl.TRIANGLES, 0, 6);
 
+      this.textureTransform = writeTextureTransform;
+      this.textureColor = writeTextureColor;
+      this.textureProperties = writeTextureProperties;
+
       i++;
     },
   };
@@ -468,7 +472,6 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
     const tick = () => {
       if (destroyed) return;
 
-      particles.update(mx, my, pressed);
       particles.update(mx, my, pressed);
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
