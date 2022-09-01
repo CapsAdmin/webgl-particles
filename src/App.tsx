@@ -1,23 +1,12 @@
 import { useEffect, useState } from "react";
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import "./App.css";
-import {
-  createDataTexture,
-  createFullscreenProgram,
-  createDoubleBufferTexture,
-  createShaderProgram,
-  attachVerticesToProgram,
-} from "./WebGLHelpers";
+
 import chroma from "chroma-js";
+import {
+  attachVerticesToProgram,
+  createDoubleBufferTexture,
+  createFullscreenProgram,
+  createShaderProgram,
+} from "./WebGLHelpers";
 
 const PARTICLE_COUNT = 20000;
 
