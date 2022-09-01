@@ -70,12 +70,12 @@ const createFullscreenProgram = (
 ) => {
   const program = createShaderProgram(
     gl,
-    glsl`#version 300 es
-  in vec2 pos;
-  void main() {
-    gl_Position = vec4(pos, 0, 1);
-  }
-`,
+    glsl`
+        in vec2 pos;
+        void main() {
+            gl_Position = vec4(pos, 0, 1);
+        }
+    `,
     fragmentSource
   );
 
@@ -206,82 +206,81 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
 
   const [program, buffer] = createFullscreenProgram(
     gl,
-    glsl`#version 300 es
-    
-      uniform highp vec3 mouse;
+    glsl`    
+      uniform vec3 mouse;
 
       uniform sampler2D transformTexture;
       uniform sampler2D colorTexture;
       uniform sampler2D propertyTexture;
           
-      layout(location=0) out highp vec4 transformOut;
-      layout(location=1) out highp vec4 colorOut;
-      layout(location=2) out highp vec4 propertyOut;
+      layout(location=0) out vec4 transformOut;
+      layout(location=1) out vec4 colorOut;
+      layout(location=2) out vec4 propertyOut;
 
-      const highp int particleCount = ${PARTICLE_COUNT};
+      const int particleCount = ${PARTICLE_COUNT};
 
       const int textureSize = ${textureSize};
 
-      highp vec4 fetchFromIndex(sampler2D texture, int index) {
+      vec4 fetchFromIndex(sampler2D texture, int index) {
         return texelFetch(texture, ivec2(index%textureSize, index/textureSize), 0);
       }
 
-      highp vec4 getTransform(int index) {
+      vec4 getTransform(int index) {
         return fetchFromIndex(transformTexture, index);
       }
-      highp vec4 getColor(int index) {
+      vec4 getColor(int index) {
         return fetchFromIndex(colorTexture, index);
       }
-      highp vec4 getProperties(int index) {
+      vec4 getProperties(int index) {
         return fetchFromIndex(propertyTexture, index);
       }
 
-      highp float particleDistance(highp vec2 dir) {
-        highp float linear = sqrt((dir.x * dir.x + dir.y * dir.y) / 8.0);
+      float particleDistance(vec2 dir) {
+        float linear = sqrt((dir.x * dir.x + dir.y * dir.y) / 8.0);
       
-        highp float attractionForce = pow(linear, 0.2) - 1.0;
-        highp float stiffness = 100000.0;
-        const highp float radius = 1.0;
-        highp float repulsionForce = pow(-linear + 1.0, (1.0 / radius) * 200.0);
+        float attractionForce = pow(linear, 0.2) - 1.0;
+        float stiffness = 100000.0;
+        const float radius = 1.0;
+        float repulsionForce = pow(-linear + 1.0, (1.0 / radius) * 200.0);
         return attractionForce * 2.5 + repulsionForce * stiffness;
       }
 
 
-      highp vec4 updateTransform(int INDEX) {
-        highp vec2 pos = getTransform(INDEX).xy;
-        highp vec2 vel = getTransform(INDEX).zw;
+      vec4 updateTransform(int INDEX) {
+        vec2 pos = getTransform(INDEX).xy;
+        vec2 vel = getTransform(INDEX).zw;
 
-        highp vec3 color = getColor(INDEX).rgb;
+        vec3 color = getColor(INDEX).rgb;
 
-        highp vec2 props = getProperties(INDEX).xy;
-        highp float gravity = props.x;
-        highp float radius = props.y;
+        vec2 props = getProperties(INDEX).xy;
+        float gravity = props.x;
+        float radius = props.y;
 
-        highp float friction = 0.9;
-        highp float heat = 0.0001;
+        float friction = 0.9;
+        float heat = 0.0001;
 
         const bool wrapAround = false;
 
         for (int i = 0; i < particleCount; i++) {
-          highp vec2 otherPos = getTransform(i).xy;
-          highp vec3 otherColor = getColor(i).rgb;
-          highp vec2 direction = pos - otherPos;
+          vec2 otherPos = getTransform(i).xy;
+          vec3 otherColor = getColor(i).rgb;
+          vec2 direction = pos - otherPos;
           
-          highp float colorDistance = cos(length(otherColor.rgb - color.gbr - color.brg))*0.1;
+          float colorDistance = cos(length(otherColor.rgb - color.gbr - color.brg))*0.1;
 
-          highp float attraction = particleDistance(direction) * gravity;
+          float attraction = particleDistance(direction) * gravity;
 
           vel += direction * attraction * colorDistance;
         }
 
         if (mouse.z != 0.0) {
-          highp vec2 direction = pos - mouse.xy;
-          highp float distance = length(direction);
+          vec2 direction = pos - mouse.xy;
+          float distance = length(direction);
           if (distance > 0.0) {
             direction /= distance;
           }
 
-          highp float attraction = particleDistance(direction) * mouse.z * 0.01;
+          float attraction = particleDistance(direction) * mouse.z * 0.01;
 
           vel += direction * attraction;
         }
@@ -482,7 +481,7 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
 
   const program = createShaderProgram(
     gl,
-    glsl`#version 300 es
+    glsl`
       in vec2 indexPos;
       in vec2 pos;
         uniform sampler2D textureTransform;
@@ -493,7 +492,7 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
         out vec4 outProperties;
         out vec4 outTransform;
 
-        const highp float SIZE = 0.005;
+        const float SIZE = 0.005;
         
         void main() {
           vec4 transform = texelFetch(textureTransform, ivec2(indexPos.y, indexPos.x), 0);
@@ -504,19 +503,19 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
           gl_Position = vec4(pos * SIZE + transform.xy , 0, 1);
         }
       `,
-    `#version 300 es
-        out highp vec4 fragColor;
+    glsl`
+        out vec4 fragColor;
 
-        const highp float SIZE = 0.005;
-        const highp vec2 screenSize = vec2(${width}.0, ${height}.0);
+        const float SIZE = 0.005;
+        const vec2 screenSize = vec2(${width}.0, ${height}.0);
 
-        in highp vec4 outColor;
-        in highp vec4 outProperties;
-        in highp vec4 outTransform;
+        in vec4 outColor;
+        in vec4 outProperties;
+        in vec4 outTransform;
 
         void main() {
-          highp vec2 screenPos = (gl_FragCoord.xy/screenSize)*2.0-1.0;
-          highp float alpha = -length(outTransform.xy - screenPos)*(1.0/SIZE)+1.0;
+          vec2 screenPos = (gl_FragCoord.xy/screenSize)*2.0-1.0;
+          float alpha = -length(outTransform.xy - screenPos)*(1.0/SIZE)+1.0;
 
           alpha = pow(alpha, 0.5);
 
