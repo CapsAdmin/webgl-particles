@@ -24,34 +24,35 @@ const createShader = (
     return shader;
 };
 
-export const createFragmentProgram = (
-    gl: WebGL2RenderingContext,
-    fragmentSource: string
+export const attachVerticesToProgram = (gl: WebGL2RenderingContext, program: WebGLProgram, array: Float32Array, name: string) => {
+    gl.useProgram(program)
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(
+        gl.ARRAY_BUFFER,
+        array,
+        gl.STATIC_DRAW
+    );
+    const location = gl.getAttribLocation(program, name);
+    gl.enableVertexAttribArray(location);
+    gl.vertexAttribPointer(location, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    return buffer
+}
+
+export const createShaderProgram = (gl: WebGL2RenderingContext,
+    vertexSource: string,
+    fragmentSource: string,
 ) => {
     const program = gl.createProgram();
     if (!program) {
         throw new Error("Failed to create program");
     }
 
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array([
-            -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0,
-        ]),
-        gl.STATIC_DRAW
-    );
-
     const vertexShader = createShader(
         gl,
         gl.VERTEX_SHADER,
-        `#version 300 es
-        in vec2 a_position;
-        void main() {
-          gl_Position = vec4(a_position, 0, 1);
-        }
-      `
+        vertexSource
     );
 
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
@@ -60,11 +61,25 @@ export const createFragmentProgram = (
     gl.attachShader(program, fragmentShader);
     gl.linkProgram(program);
 
-    const positionLocation = gl.getAttribLocation(program, "a_position");
-    gl.enableVertexAttribArray(positionLocation);
-    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+    return program
+}
 
-    return program;
+export const createFullscreenProgram = (
+    gl: WebGL2RenderingContext,
+    fragmentSource: string
+) => {
+    const program = createShaderProgram(gl, `#version 300 es
+    in vec2 pos;
+    void main() {
+      gl_Position = vec4(pos, 0, 1);
+    }
+  `, fragmentSource);
+
+    const buffer = attachVerticesToProgram(gl, program, new Float32Array([
+        -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0,
+    ]), "pos")
+
+    return [program, buffer] as const
 };
 
 export const createDataTexture = (gl: WebGL2RenderingContext, array: Float32Array, width: number, height: number) => {

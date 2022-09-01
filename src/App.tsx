@@ -12,12 +12,14 @@ import {
 import "./App.css";
 import {
   createDataTexture,
-  createFragmentProgram,
+  createFullscreenProgram,
   createDoubleBufferTexture,
+  createShaderProgram,
+  attachVerticesToProgram,
 } from "./WebGLHelpers";
 import chroma from "chroma-js";
 
-const PARTICLE_COUNT = 1000;
+const PARTICLE_COUNT = 20000;
 
 const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
   gl.getExtension("EXT_color_buffer_float");
@@ -48,7 +50,7 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
       if (i < particleCount) {
         let [r, g, b] = chroma.hsv((i / particleCount) * 360, 0.9, 1).gl();
 
-        return [r, g, b, 0];
+        return [r, g, b, 1];
       }
     },
     gl
@@ -64,7 +66,7 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
     gl
   );
 
-  const program = createFragmentProgram(
+  const [program, buffer] = createFullscreenProgram(
     gl,
     `#version 300 es
     
@@ -100,29 +102,18 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
         highp float linear = sqrt((dir.x * dir.x + dir.y * dir.y) / 8.0);
       
         highp float attractionForce = pow(linear, 0.2) - 1.0;
-        highp float stiffness = 5000.0;
+        highp float stiffness = 100000.0;
         const highp float radius = 1.0;
         highp float repulsionForce = pow(-linear + 1.0, (1.0 / radius) * 200.0);
         return attractionForce * 2.5 + repulsionForce * stiffness;
       }
 
-      highp vec3 rgb2hsv(highp vec3 c)
-      {
-        highp vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-        highp vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-        highp vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-
-          highp float d = q.x - min(q.w, q.y);
-          highp float e = 1.0e-10;
-          return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-      }
 
       highp vec4 updateTransform(int INDEX) {
         highp vec2 pos = getTransform(INDEX).xy;
         highp vec2 vel = getTransform(INDEX).zw;
 
         highp vec3 color = getColor(INDEX).rgb;
-        highp vec3 hsv = rgb2hsv(color);
 
         highp vec2 props = getProperties(INDEX).xy;
         highp float gravity = props.x;
@@ -138,8 +129,7 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
           highp vec3 otherColor = getColor(i).rgb;
           highp vec2 direction = pos - otherPos;
           
-          highp vec3 otherHsv = rgb2hsv(otherColor);
-          highp float colorDistance = abs(hsv.x - otherHsv.x);
+          highp float colorDistance = cos(length(otherColor.rgb - color.gbr - color.brg))*0.1;
 
           highp float attraction = particleDistance(direction) * gravity;
 
@@ -275,6 +265,9 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
     update(mx: number, my: number, pressed: number) {
       gl.useProgram(program);
 
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
       for (let i = 0; i < textures.length; i++) {
         gl.activeTexture(gl.TEXTURE0 + i);
         gl.bindTexture(gl.TEXTURE_2D, textures[i].texture.getRead());
@@ -314,8 +307,8 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
     const gl = canvas.getContext("webgl2");
     if (!gl) return;
 
-    const width = 512;
-    const height = 512;
+    const width = 1024;
+    const height = 1024;
     canvas.width = width;
     canvas.height = height;
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -350,48 +343,102 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
     let particles = createParticles(gl, PARTICLE_COUNT);
     let destroyed = false;
 
-    const program = createFragmentProgram(
+    const program = createShaderProgram(
       gl,
       `#version 300 es
+      in vec2 indexPos;
+      in vec2 pos;
         uniform sampler2D textureTransform;
         uniform sampler2D textureColor;
         uniform sampler2D textureProperties;
+
+        out vec4 outColor;
+        out vec4 outProperties;
+        out vec4 outTransform;
+
+        const highp float SIZE = 0.005;
+        
+        void main() {
+          vec4 transform = texelFetch(textureTransform, ivec2(indexPos.y, indexPos.x), 0);
+          outTransform = transform;
+          outColor = texelFetch(textureColor, ivec2(indexPos.y, indexPos.x), 0);
+          outProperties = texelFetch(textureProperties, ivec2(indexPos.y, indexPos.x), 0);
+
+          gl_Position = vec4(pos * SIZE + transform.xy , 0, 1);
+        }
+      `,
+      `#version 300 es
         out highp vec4 fragColor;
 
-        const int textureSize = ${particles.textureSize};
+        const highp float SIZE = 0.005;
+        const highp vec2 screenSize = vec2(${width}.0, ${height}.0);
 
-        highp vec4 getTransform(int index) {
-          return texelFetch(textureTransform, ivec2(index%textureSize, index/textureSize), 0);
-        }
-        highp vec4 getColor(int index) {
-          return texelFetch(textureColor, ivec2(index%textureSize, index/textureSize), 0);
-        }
-        highp vec4 getProperties(int index) {
-          return texelFetch(textureProperties, ivec2(index%textureSize, index/textureSize), 0);
-        }
-
-        const highp int particleCount = ${PARTICLE_COUNT};
-        const highp float width = ${width}.0;
-        const highp float height = ${height}.0;
+        in highp vec4 outColor;
+        in highp vec4 outProperties;
+        in highp vec4 outTransform;
 
         void main() {
-          highp vec3 sum = vec3(0.0, 0.0, 0.0);
-          highp vec2 pixelPos = vec2(float(gl_FragCoord.x - 0.5), float(gl_FragCoord.y - 0.5));
+          highp vec2 screenPos = (gl_FragCoord.xy/screenSize)*2.0-1.0;
+          highp float alpha = -length(outTransform.xy - screenPos)*(1.0/SIZE)+1.0;
 
-          for (int i = 0; i < particleCount; i++) {
+          alpha = pow(alpha, 0.5);
 
-            highp vec2 pos = getTransform(i).xy;
-            pos = (pos * vec2(0.5) + vec2(0.5)) * vec2(width, height);
-
-            highp float len = length(pos - pixelPos);
-            if (len > 0.0 && len < 3.0) {
-              sum += getColor(i).rgb / pow(len, 3.0);
-            }
-         }
-
-          fragColor = vec4(sum, 1.0);
+          fragColor = vec4(outColor.rgb, alpha * outColor.a);
         }
       `
+    );
+
+    const particleIndices = new Float32Array(particles.count * 12);
+
+    for (let x = 0; x < particles.textureSize; x++) {
+      for (let y = 0; y < particles.textureSize; y++) {
+        const idx = (x * particles.textureSize + y) * 12;
+        particleIndices[idx + 0] = x;
+        particleIndices[idx + 1] = y;
+        particleIndices[idx + 2] = x;
+        particleIndices[idx + 3] = y;
+        particleIndices[idx + 4] = x;
+        particleIndices[idx + 5] = y;
+        particleIndices[idx + 6] = x;
+        particleIndices[idx + 7] = y;
+        particleIndices[idx + 8] = x;
+        particleIndices[idx + 9] = y;
+        particleIndices[idx + 10] = x;
+        particleIndices[idx + 11] = y;
+      }
+    }
+
+    const indexBuffer = attachVerticesToProgram(
+      gl,
+      program,
+      particleIndices,
+      "indexPos"
+    );
+
+    const particleQuads = new Float32Array(particles.count * 12);
+
+    for (let i = 0; i < particles.count; i++) {
+      const idx = i * 12;
+
+      particleQuads[idx + 0] = -1.0;
+      particleQuads[idx + 1] = -1.0;
+      particleQuads[idx + 2] = 1.0;
+      particleQuads[idx + 3] = -1.0;
+      particleQuads[idx + 4] = -1.0;
+      particleQuads[idx + 5] = 1.0;
+      particleQuads[idx + 6] = -1.0;
+      particleQuads[idx + 7] = 1.0;
+      particleQuads[idx + 8] = 1.0;
+      particleQuads[idx + 9] = -1.0;
+      particleQuads[idx + 10] = 1.0;
+      particleQuads[idx + 11] = 1.0;
+    }
+
+    const posBuffer = attachVerticesToProgram(
+      gl,
+      program,
+      particleQuads,
+      "pos"
     );
 
     const transformLocation = gl.getUniformLocation(
@@ -404,14 +451,17 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
       "textureProperties"
     );
 
+    let i = 0;
+
     const tick = () => {
       if (destroyed) return;
 
+      i++;
+
       particles.update(mx, my, pressed);
 
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
       gl.useProgram(program);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, particles.textureTransform);
@@ -425,8 +475,16 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
       gl.bindTexture(gl.TEXTURE_2D, particles.textureProperties);
       gl.uniform1i(propertyLocation, 2);
 
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.bindBuffer(gl.ARRAY_BUFFER, indexBuffer);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
+      gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
+      gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.drawArrays(gl.TRIANGLES, 0, particles.count * 6);
+      gl.disable(gl.BLEND);
       requestAnimationFrame(tick);
     };
     tick();
@@ -441,41 +499,6 @@ const useGPU = (canvas: HTMLCanvasElement | null) => {
   }, [canvas]);
 };
 
-function particleDistance(dx: number, dy: number) {
-  let linear = Math.sqrt((dx * dx + dy * dy) / 8);
-
-  //return Math.sin(-Math.pow(linear * 2, 0.4) * Math.PI);
-  let attractionForce = Math.pow(linear, 0.2) - 1;
-  let stiffness = 3000;
-  const radius = 2;
-  let repulsionForce = Math.pow(-linear + 1, (1 / radius) * 200);
-  return attractionForce * 2.5 + repulsionForce * stiffness;
-}
-
-const chartData: Array<{
-  name: string;
-  amt: number;
-  force: number;
-}> = [];
-
-for (let dist = 1; dist >= 0; dist -= 0.01) {
-  let x1 = -dist;
-  let y1 = -dist;
-
-  let x2 = dist;
-  let y2 = dist;
-
-  let dx = x2 - x1;
-  let dy = y2 - y1;
-
-  let distance = particleDistance(dx, dy);
-  chartData.push({
-    name: (Math.round(dist * 100) / 100).toString(),
-    force: distance,
-    amt: dist,
-  });
-}
-
 function App() {
   const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(
     null
@@ -488,23 +511,9 @@ function App() {
           setCanvasElement(e);
         }}
         style={{
-          backgroundColor: "purple",
+          backgroundColor: "black",
         }}
       />
-
-      <div style={{ width: 500, height: 500 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart width={500} height={500} data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-
-            <Line type="monotone" dataKey="force" stroke="#82ca9d" />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
     </div>
   );
 }
