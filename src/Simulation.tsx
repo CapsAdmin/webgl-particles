@@ -1,61 +1,6 @@
 import chroma from "chroma-js";
 import { glsl, twgl } from "./WebGL";
 
-const createShader = (
-  gl: WebGL2RenderingContext,
-  type: number,
-  source: string
-) => {
-  const shader = gl.createShader(type);
-  if (!shader) {
-    throw new Error("Failed to create shader");
-  }
-
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  const compiled = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-  if (!compiled) {
-    console.error(source);
-    let i = 1;
-    for (const line of source.split("\n")) {
-      console.log(i, line);
-      i++;
-    }
-    throw new Error(gl.getShaderInfoLog(shader) || "unknown error");
-  }
-  return shader;
-};
-
-const attachVerticesToProgram = (
-  gl: WebGL2RenderingContext,
-  program: WebGLProgram,
-  array: Float32Array,
-  name: string
-) => {
-  gl.useProgram(program);
-  const buffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.bufferData(gl.ARRAY_BUFFER, array, gl.STATIC_DRAW);
-  const location = gl.getAttribLocation(program, name);
-  gl.enableVertexAttribArray(location);
-  gl.vertexAttribPointer(location, 2, gl.FLOAT, false, 0, 0);
-  gl.bindBuffer(gl.ARRAY_BUFFER, null);
-  return buffer;
-};
-
-const createShaderProgram = (
-  gl: WebGL2RenderingContext,
-  vertexSource: string,
-  fragmentSource: string
-) => {
-  return twgl.createProgramInfo(gl, [vertexSource, fragmentSource], {
-    errorCallback: (err) => {
-      console.error(err);
-      throw err;
-    },
-  });
-};
-
 const createDataTexture = (
   gl: WebGL2RenderingContext,
   array: Float32Array,
@@ -124,7 +69,10 @@ const createDoubleBufferTexture = (
 
 const PARTICLE_COUNT = 20000;
 
-const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
+const createParticleSimulation = (
+  gl: WebGL2RenderingContext,
+  particleCount: number
+) => {
   let textureSize = 2;
   while (textureSize * textureSize < particleCount) {
     textureSize *= 2;
@@ -309,7 +257,11 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
     gl
   );
 
-  const programInfo = createShaderProgram(gl, VERTEX, FRAGMENT);
+  const programInfo = twgl.createProgramInfo(gl, [VERTEX, FRAGMENT], {
+    errorCallback: (err) => {
+      throw err;
+    },
+  });
 
   const bufferInfo = twgl.createBufferInfoFromArrays(gl, {
     pos: {
@@ -411,7 +363,6 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
         propertyTexture: frameBufferInfoRead.attachments[2],
       });
 
-      console.log(bufferInfo.numElements);
       twgl.drawBufferInfo(gl, bufferInfo);
 
       twgl.bindFramebufferInfo(gl);
@@ -424,8 +375,6 @@ const createParticles = (gl: WebGL2RenderingContext, particleCount: number) => {
         frameBufferInfoRead,
         frameBufferInfoWrite,
       ];
-
-      console.log(getParticleState(0, frameBufferInfoRead.attachments[0]));
     },
   };
 };
@@ -442,6 +391,50 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
   canvas.height = height;
 
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
+  const VERTEX = glsl`
+    in vec2 indexPos;
+    in vec2 pos;
+
+    uniform sampler2D textureTransform;
+    uniform sampler2D textureColor;
+    uniform sampler2D textureProperties;
+
+    out vec4 outColor;
+    out vec4 outProperties;
+    out vec4 outTransform;
+
+    const float SIZE = 0.005;
+        
+    void main() {
+        vec4 transform = texelFetch(textureTransform, ivec2(indexPos.y, indexPos.x), 0);
+        outTransform = transform;
+        outColor = texelFetch(textureColor, ivec2(indexPos.y, indexPos.x), 0);
+        outProperties = texelFetch(textureProperties, ivec2(indexPos.y, indexPos.x), 0);
+
+        gl_Position = vec4(pos * SIZE + transform.xy , 0, 1);
+    }
+`;
+
+  const FRAGMENT = glsl`
+    out vec4 fragColor;
+
+    const float SIZE = 0.005;
+    const vec2 screenSize = vec2(${width}.0, ${height}.0);
+
+    in vec4 outColor;
+    in vec4 outProperties;
+    in vec4 outTransform;
+
+    void main() {
+        vec2 screenPos = (gl_FragCoord.xy/screenSize)*2.0-1.0;
+        float alpha = -length(outTransform.xy - screenPos)*(1.0/SIZE)+1.0;
+
+        alpha = pow(alpha, 0.5);
+
+        fragColor = vec4(outColor.rgb, alpha * outColor.a);
+    }
+`;
 
   let mx = 0;
   let my = 0;
@@ -469,59 +462,19 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
   };
   window.addEventListener("mouseup", mouseUp);
 
-  let particles = createParticles(gl, PARTICLE_COUNT);
-  let destroyed = false;
+  let particleSimulation = createParticleSimulation(gl, PARTICLE_COUNT);
 
-  const programInfo = createShaderProgram(
-    gl,
-    glsl`
-      in vec2 indexPos;
-      in vec2 pos;
-        uniform sampler2D textureTransform;
-        uniform sampler2D textureColor;
-        uniform sampler2D textureProperties;
+  const programInfo = twgl.createProgramInfo(gl, [VERTEX, FRAGMENT], {
+    errorCallback: (err) => {
+      throw err;
+    },
+  });
 
-        out vec4 outColor;
-        out vec4 outProperties;
-        out vec4 outTransform;
+  const particleIndices = new Float32Array(particleSimulation.count * 12);
 
-        const float SIZE = 0.005;
-        
-        void main() {
-          vec4 transform = texelFetch(textureTransform, ivec2(indexPos.y, indexPos.x), 0);
-          outTransform = transform;
-          outColor = texelFetch(textureColor, ivec2(indexPos.y, indexPos.x), 0);
-          outProperties = texelFetch(textureProperties, ivec2(indexPos.y, indexPos.x), 0);
-
-          gl_Position = vec4(pos * SIZE + transform.xy , 0, 1);
-        }
-      `,
-    glsl`
-        out vec4 fragColor;
-
-        const float SIZE = 0.005;
-        const vec2 screenSize = vec2(${width}.0, ${height}.0);
-
-        in vec4 outColor;
-        in vec4 outProperties;
-        in vec4 outTransform;
-
-        void main() {
-          vec2 screenPos = (gl_FragCoord.xy/screenSize)*2.0-1.0;
-          float alpha = -length(outTransform.xy - screenPos)*(1.0/SIZE)+1.0;
-
-          alpha = pow(alpha, 0.5);
-
-          fragColor = vec4(outColor.rgb, alpha * outColor.a);
-        }
-      `
-  );
-
-  const particleIndices = new Float32Array(particles.count * 12);
-
-  for (let x = 0; x < particles.textureSize; x++) {
-    for (let y = 0; y < particles.textureSize; y++) {
-      const idx = (x * particles.textureSize + y) * 12;
+  for (let x = 0; x < particleSimulation.textureSize; x++) {
+    for (let y = 0; y < particleSimulation.textureSize; y++) {
+      const idx = (x * particleSimulation.textureSize + y) * 12;
       particleIndices[idx + 0] = x;
       particleIndices[idx + 1] = y;
       particleIndices[idx + 2] = x;
@@ -537,16 +490,16 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
     }
   }
 
-  const indexBuffer = attachVerticesToProgram(
-    gl,
-    programInfo.program,
-    particleIndices,
-    "indexPos"
-  );
+  const indexInfo = twgl.createBufferInfoFromArrays(gl, {
+    indexPos: {
+      numComponents: 2,
+      data: particleIndices,
+    },
+  });
 
-  const particleQuads = new Float32Array(particles.count * 12);
+  const particleQuads = new Float32Array(particleSimulation.count * 12);
 
-  for (let i = 0; i < particles.count; i++) {
+  for (let i = 0; i < particleSimulation.count; i++) {
     const idx = i * 12;
 
     particleQuads[idx + 0] = -1.0;
@@ -563,55 +516,35 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
     particleQuads[idx + 11] = 1.0;
   }
 
-  const posBuffer = attachVerticesToProgram(
-    gl,
-    programInfo.program,
-    particleQuads,
-    "pos"
-  );
+  const posInfo = twgl.createBufferInfoFromArrays(gl, {
+    pos: {
+      numComponents: 2,
+      data: particleQuads,
+    },
+  });
 
-  const transformLocation = gl.getUniformLocation(
-    programInfo.program,
-    "textureTransform"
-  );
-  const colorLocation = gl.getUniformLocation(
-    programInfo.program,
-    "textureColor"
-  );
-  const propertyLocation = gl.getUniformLocation(
-    programInfo.program,
-    "textureProperties"
-  );
+  let destroyed = false;
 
   const tick = () => {
     if (destroyed) return;
 
-    particles.update(mx, my, pressed);
+    particleSimulation.update(mx, my, pressed);
 
     gl.useProgram(programInfo.program);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, particles.textureTransform);
-    gl.uniform1i(transformLocation, 0);
+    twgl.setUniforms(programInfo, {
+      textureTransform: particleSimulation.textureTransform,
+      textureColor: particleSimulation.textureColor,
+      textureProperties: particleSimulation.textureProperties,
+    });
 
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, particles.textureColor);
-    gl.uniform1i(colorLocation, 1);
-
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, particles.textureProperties);
-    gl.uniform1i(propertyLocation, 2);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, indexBuffer);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+    twgl.setBuffersAndAttributes(gl, programInfo, indexInfo);
+    twgl.setBuffersAndAttributes(gl, programInfo, posInfo);
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.drawArrays(gl.TRIANGLES, 0, particles.count * 6);
+
+    twgl.drawBufferInfo(gl, indexInfo);
 
     gl.disable(gl.BLEND);
     requestAnimationFrame(tick);
