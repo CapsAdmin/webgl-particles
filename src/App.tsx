@@ -1,10 +1,18 @@
 import { useEffect, useState } from "react";
-import { createSimulation } from "./Simulation";
+import { createParticleSimulationRenderer } from "./Renderer";
+import { createParticleSimulation } from "./Simulation";
 
 const useSimulation = (canvas: HTMLCanvasElement | null) => {
   useEffect(() => {
     if (!canvas) return;
-    return createSimulation(canvas);
+
+    const gl = canvas.getContext("webgl2");
+    if (!gl) return;
+
+    const PARTICLE_COUNT = 20000;
+    let particleSimulation = createParticleSimulation(gl, PARTICLE_COUNT);
+
+    return createParticleSimulationRenderer(gl, particleSimulation);
   }, [canvas]);
 };
 
