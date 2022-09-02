@@ -1,71 +1,6 @@
 import chroma from "chroma-js";
+import { FramebufferInfo } from "twgl.js";
 import { glsl, twgl } from "./WebGL";
-
-const createDataTexture = (
-  gl: WebGL2RenderingContext,
-  array: Float32Array,
-  width: number,
-  height: number
-) => {
-  const texture = gl.createTexture();
-  if (!texture) {
-    throw new Error("Failed to create texture");
-  }
-
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA32F,
-    width,
-    height,
-    0,
-    gl.RGBA,
-    gl.FLOAT,
-    array
-  );
-
-  return texture;
-};
-
-const createDoubleBufferTexture = (
-  size: number,
-  init: (i: number) => [number, number, number, number] | undefined,
-  gl: WebGL2RenderingContext
-) => {
-  const data = new Float32Array(size * size * 4);
-  for (let i = 0; i < size * size; i++) {
-    const arr = init(i);
-    if (!arr) {
-      break;
-    }
-    let O = i * 4 - 1;
-
-    data[++O] = arr[0];
-    data[++O] = arr[1];
-    data[++O] = arr[2];
-    data[++O] = arr[3];
-  }
-
-  let read = createDataTexture(gl, data, size, size);
-  let write = createDataTexture(gl, data, size, size);
-
-  return {
-    getRead() {
-      return read;
-    },
-    getWrite() {
-      return write;
-    },
-    swap() {
-      [read, write] = [write, read];
-    },
-  };
-};
 
 const PARTICLE_COUNT = 20000;
 
@@ -220,6 +155,46 @@ const createParticleSimulation = (
     }
   `;
 
+  const createDoubleBufferTexture = (
+    size: number,
+    init: (i: number) => [number, number, number, number] | undefined,
+    gl: WebGL2RenderingContext
+  ) => {
+    const data = new Float32Array(size * size * 4);
+    for (let i = 0; i < size * size; i++) {
+      const arr = init(i);
+      if (!arr) {
+        break;
+      }
+      let O = i * 4 - 1;
+
+      data[++O] = arr[0];
+      data[++O] = arr[1];
+      data[++O] = arr[2];
+      data[++O] = arr[3];
+    }
+
+    let out = [];
+
+    for (let i = 0; i < 2; i++) {
+      out.push(
+        twgl.createTexture(gl, {
+          width: size,
+          height: size,
+          format: gl.RGBA,
+          internalFormat: gl.RGBA32F,
+          type: gl.FLOAT,
+          src: data,
+          min: gl.NEAREST,
+          mag: gl.NEAREST,
+          wrap: gl.CLAMP_TO_EDGE,
+        })
+      );
+    }
+
+    return out;
+  };
+
   const transformTexture = createDoubleBufferTexture(
     textureSize,
     (i) => {
@@ -273,44 +248,28 @@ const createParticleSimulation = (
   twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
 
   let index = gl.COLOR_ATTACHMENT0;
-
-  let frameBufferInfoWrite = twgl.createFramebufferInfo(gl, [
-    {
-      format: gl.RGBA32F,
-      attachmentPoint: index + 0,
-      attachment: transformTexture.getWrite(),
-    },
-    {
-      format: gl.RGBA32F,
-      attachmentPoint: index + 1,
-      attachment: colorTexture.getWrite(),
-    },
-    {
-      format: gl.RGBA32F,
-      attachmentPoint: index + 2,
-      attachment: propertyTexture.getWrite(),
-    },
-  ]);
-
-  let frameBufferInfoRead = twgl.createFramebufferInfo(gl, [
-    {
-      format: gl.RGBA32F,
-      attachmentPoint: index + 0,
-      attachment: transformTexture.getRead(),
-    },
-    {
-      format: gl.RGBA32F,
-      attachmentPoint: index + 1,
-      attachment: colorTexture.getRead(),
-    },
-    {
-      format: gl.RGBA32F,
-      attachmentPoint: index + 2,
-      attachment: propertyTexture.getRead(),
-    },
-  ]);
-
-  frameBufferInfoRead.attachments[0];
+  let framebuffers: Array<FramebufferInfo> = [];
+  for (let i = 0; i < 2; i++) {
+    framebuffers.push(
+      twgl.createFramebufferInfo(gl, [
+        {
+          format: gl.RGBA32F,
+          attachmentPoint: index + 0,
+          attachment: transformTexture[i],
+        },
+        {
+          format: gl.RGBA32F,
+          attachmentPoint: index + 1,
+          attachment: colorTexture[i],
+        },
+        {
+          format: gl.RGBA32F,
+          attachmentPoint: index + 2,
+          attachment: propertyTexture[i],
+        },
+      ])
+    );
+  }
 
   const getParticleState = (index: number, tex: WebGLTexture) => {
     const fb = gl.createFramebuffer();
@@ -347,34 +306,31 @@ const createParticleSimulation = (
     count: particleCount,
     textureSize: textureSize,
 
-    textureTransform: frameBufferInfoRead.attachments[0],
-    textureColor: frameBufferInfoRead.attachments[1],
-    textureProperties: frameBufferInfoRead.attachments[2],
+    textureTransform: framebuffers[0].attachments[0],
+    textureColor: framebuffers[0].attachments[1],
+    textureProperties: framebuffers[0].attachments[2],
 
     update(mx: number, my: number, pressed: number) {
       gl.useProgram(programInfo.program);
 
-      twgl.bindFramebufferInfo(gl, frameBufferInfoWrite);
+      twgl.bindFramebufferInfo(gl, framebuffers[1]);
       twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
       twgl.setUniforms(programInfo, {
         mouse: [mx, my, pressed],
-        transformTexture: frameBufferInfoRead.attachments[0],
-        colorTexture: frameBufferInfoRead.attachments[1],
-        propertyTexture: frameBufferInfoRead.attachments[2],
+        transformTexture: framebuffers[0].attachments[0],
+        colorTexture: framebuffers[0].attachments[1],
+        propertyTexture: framebuffers[0].attachments[2],
       });
 
       twgl.drawBufferInfo(gl, bufferInfo);
 
       twgl.bindFramebufferInfo(gl);
 
-      this.textureTransform = frameBufferInfoWrite.attachments[0];
-      this.textureColor = frameBufferInfoWrite.attachments[1];
-      this.textureProperties = frameBufferInfoWrite.attachments[2];
+      this.textureTransform = framebuffers[1].attachments[0];
+      this.textureColor = framebuffers[1].attachments[1];
+      this.textureProperties = framebuffers[1].attachments[2];
 
-      [frameBufferInfoWrite, frameBufferInfoRead] = [
-        frameBufferInfoRead,
-        frameBufferInfoWrite,
-      ];
+      framebuffers.reverse();
     },
   };
 };
