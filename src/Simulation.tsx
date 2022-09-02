@@ -1,5 +1,6 @@
 import chroma from "chroma-js";
 import { FramebufferInfo } from "twgl.js";
+import { mouseEvents } from "./MouseEvent";
 import { glsl, twgl } from "./WebGL";
 
 const PARTICLE_COUNT = 20000;
@@ -392,32 +393,6 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
     }
 `;
 
-  let mx = 0;
-  let my = 0;
-  let pressed = 0;
-  const mouseMove = (e: MouseEvent) => {
-    const rect = canvas.getBoundingClientRect();
-    mx = e.clientX - rect.left;
-    my = e.clientY - rect.top;
-    mx = mx / rect.width;
-    my = my / rect.height;
-    mx = mx * 2 - 1;
-    my = my * 2 - 1;
-
-    my = -my;
-  };
-  window.addEventListener("mousemove", mouseMove);
-
-  const mouseDown = (e: MouseEvent) => {
-    pressed = e.buttons === 4 ? -1 : 1;
-  };
-  window.addEventListener("mousedown", mouseDown);
-
-  const mouseUp = (e: MouseEvent) => {
-    pressed = 0;
-  };
-  window.addEventListener("mouseup", mouseUp);
-
   let particleSimulation = createParticleSimulation(gl, PARTICLE_COUNT);
 
   const programInfo = twgl.createProgramInfo(gl, [VERTEX, FRAGMENT], {
@@ -481,10 +456,12 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
 
   let destroyed = false;
 
+  const [readMouseState, removeMouseEvents] = mouseEvents(canvas);
+
   const tick = () => {
     if (destroyed) return;
 
-    particleSimulation.update(mx, my, pressed);
+    particleSimulation.update(...readMouseState());
 
     gl.useProgram(programInfo.program);
 
@@ -509,9 +486,6 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
 
   return () => {
     destroyed = true;
-    // gpu.destroy();
-    window.removeEventListener("mousemove", mouseMove);
-    window.removeEventListener("mousedown", mouseDown);
-    window.removeEventListener("mouseup", mouseUp);
+    removeMouseEvents();
   };
 };
