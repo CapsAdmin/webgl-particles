@@ -1,6 +1,6 @@
 import chroma from "chroma-js";
 import { FramebufferInfo } from "twgl.js";
-import { mouseEvents } from "./MouseEvent";
+import { mouseEvents, renderLoop } from "./Events";
 import { glsl, twgl } from "./WebGL";
 
 const PARTICLE_COUNT = 20000;
@@ -447,13 +447,9 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
     },
   });
 
-  let destroyed = false;
-
   const [readMouseState, removeMouseEvents] = mouseEvents(canvas);
 
-  const tick = () => {
-    if (destroyed) return;
-
+  const stopRendering = renderLoop(() => {
     particleSimulation.update(...readMouseState());
 
     twgl.resizeCanvasToDisplaySize(gl.canvas);
@@ -477,12 +473,10 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
     twgl.drawBufferInfo(gl, indexInfo);
 
     gl.disable(gl.BLEND);
-    requestAnimationFrame(tick);
-  };
-  tick();
+  });
 
   return () => {
-    destroyed = true;
+    stopRendering();
     removeMouseEvents();
   };
 };

@@ -13,7 +13,6 @@ export const mouseEvents = (canvas: HTMLCanvasElement) => {
 
         my = -my;
 
-        callback(mx, my, pressed);
     };
     window.addEventListener("mousemove", mouseMove);
 
@@ -38,4 +37,20 @@ export const mouseEvents = (canvas: HTMLCanvasElement) => {
     }
 
     return [read, destroy] as const;
+}
+
+export const renderLoop = (onRender: () => void) => {
+    let stop = false;
+
+    const update = () => {
+        if (stop) return;
+        onRender()
+        requestAnimationFrame(update);
+    }
+
+    update()
+
+    return () => {
+        stop = true;
+    }
 }
