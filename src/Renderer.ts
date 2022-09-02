@@ -40,7 +40,8 @@ void main() {
     vec2 screenPos = (gl_FragCoord.xy/screenSize)*2.0-1.0;
     float alpha = -length(outTransform.xy - screenPos)*(1.0/SIZE)+1.0;
 
-    alpha = pow(alpha, 0.5);
+    alpha = pow(alpha, 3.0);
+    alpha += sin(outTransform.w);
 
     fragColor = vec4(outColor.rgb, alpha * outColor.a);
 }
@@ -108,6 +109,7 @@ export const createParticleSimulationRenderer = (gl: WebGL2RenderingContext, par
     });
 
     const [readMouseState, removeMouseEvents] = mouseEvents(gl.canvas);
+
 
     const stopRendering = renderLoop(() => {
         particleSimulation.update(...readMouseState());

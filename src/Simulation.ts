@@ -4,15 +4,50 @@ import { mouseEvents, renderLoop } from "./Events";
 import { glsl, twgl } from "./WebGL";
 
 const distanceFunction = `
+
+float normalizedLength(vec2 v) {
+  float len = v.x*v.x + v.y*v.y;
+  if (len > 0.0) {
+    return len / 8.0;
+  }
+  return len;
+}
+
+float normalizedLength(vec3 v) {
+  float len = v.x*v.x + v.y*v.y + v.z*v.z;
+  if (len > 0.0) {
+    return len / 12.0;
+  }
+  return len;
+}
+
 float particleDistance(vec2 dir) {
-  float linear = sqrt((dir.x * dir.x + dir.y * dir.y) / 8.0);
+  float size = pow(0.1 / 5.0, 2.0)*3.0;
+
+  float outterRadius = -normalizedLength(dir) + 1.0;
+  outterRadius = pow(outterRadius, 160.0);
+
+  float innerRadius = -normalizedLength(dir) + 1.0;
+  innerRadius = pow(innerRadius + tan(size), 5.0 * (1.0 / size));
   
-  float attractionForce = pow(linear, 0.2) - 1.0;
-  float stiffness = 100000.0;
-  const float radius = 1.0;
-  float repulsionForce = pow(-linear + 1.0, (1.0 / radius) * 200.0);
-  return attractionForce * 2.5 + repulsionForce * stiffness;
-}`
+  return (innerRadius - outterRadius);
+}
+
+
+`
+
+const vec1 = [-1, -1, -1];
+const vec2 = [1, 1, 1];
+
+const length = (vec: number[]) => {
+  return (vec.reduce((acc, v) => acc + v * v, 0));
+}
+const sub = (vec1: number[], vec2: number[]) => {
+  return vec1.map((v, i) => v - vec2[i]);
+}
+
+console.log(length(sub(vec1, vec2)));
+
 
 const VERTEX = glsl`
 in vec2 pos;
@@ -76,37 +111,37 @@ vec4 updateTransform() {
     float gravity = props.x;
     float radius = props.y;
 
-    float friction = 0.9;
+    float friction = 0.5;
     float heat = 0.0001;
 
-    const bool wrapAround = false;
+    const bool wrapAround = true;
 
     for (int i = 0; i < particleCount; i++) {
         vec2 otherPos = getTransform(i).xy;
         vec3 otherColor = getColor(i).rgb;
         vec2 direction = pos - otherPos;
         
-        float colorDistance = cos(length(otherColor.rgb - color.gbr - color.brg))*0.1;
+        //float colorDistance = cos(length(otherColor.rgb - color.gbr - color.brg));
+        float colorDistance = sin(length(otherColor.rgb + color.rgb + otherColor.brg + color.brg));
+        float attraction = particleDistance(direction);
 
-        float attraction = particleDistance(direction) * gravity;
-
-        vel += direction * attraction * colorDistance;
+        vel += direction * attraction * gravity * colorDistance * 0.05;
     }
 
-    if (mouse.z != 0.0) {
-        vec2 direction = pos - mouse.xy;
-        float distance = length(direction);
-        if (distance > 0.0) {
-        direction /= distance;
-        }
-
-        float attraction = particleDistance(direction) * mouse.z * 0.01;
-
-        vel += direction * attraction;
-    }
+  
 
     vel *= friction;
+    if (mouse.z != 0.0) {
+      vec2 direction = pos - mouse.xy;
+      float distance = length(direction);
+      if (distance > 0.0) {
+        direction /= distance;
+      }
 
+      float attraction = particleDistance(direction) * mouse.z;
+
+      vel += direction * attraction * 100000000.0;
+  }
     //vx += (Math.random() * 2 - 1) * heat;
     //vy += (Math.random() * 2 - 1) * heat;
 
@@ -230,7 +265,6 @@ export const createParticleSimulation = (
     (i) => {
       if (i < particleCount) {
         let [r, g, b] = chroma.hsv((i / particleCount) * 360, 0.9, 1).gl();
-
         return [r, g, b, 1];
       }
     },
@@ -241,7 +275,7 @@ export const createParticleSimulation = (
     textureSize,
     (i) => {
       if (i < particleCount) {
-        return [0.00001, 0, 0, 0];
+        return [0.01, 0, 0, 0];
       }
     },
     gl

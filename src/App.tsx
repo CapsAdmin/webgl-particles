@@ -2,20 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { createParticleSimulationRenderer } from "./Renderer";
 import { createParticleSimulation } from "./Simulation";
 
-const useSimulation = (canvas: HTMLCanvasElement | null) => {
-  useEffect(() => {
-    if (!canvas) return;
-
-    const gl = canvas.getContext("webgl2");
-    if (!gl) return;
-
-    const PARTICLE_COUNT = 20000;
-    let particleSimulation = createParticleSimulation(gl, PARTICLE_COUNT);
-
-    return createParticleSimulationRenderer(gl, particleSimulation);
-  }, [canvas]);
-};
-
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvas2Ref = useRef<HTMLCanvasElement>(null);
@@ -32,6 +18,8 @@ function App() {
 
     return createParticleSimulationRenderer(gl, particleSimulation);
   });
+
+  const particleDistanceSize = 256;
 
   return (
     <div
@@ -50,7 +38,17 @@ function App() {
       <canvas ref={canvasRef} style={{ width: "100%", height: "100vh" }} />
 
       <span>particle attraction function:</span>
-      <canvas ref={canvas2Ref} style={{ width: 512, height: 512 }} />
+      <canvas
+        ref={canvas2Ref}
+        style={{
+          width: particleDistanceSize,
+          height: particleDistanceSize,
+          minWidth: particleDistanceSize,
+          maxWidth: particleDistanceSize,
+          minHeight: particleDistanceSize,
+          maxHeight: particleDistanceSize,
+        }}
+      />
       <span>blue attracts, red detracts</span>
     </div>
   );
