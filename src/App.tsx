@@ -14,16 +14,19 @@ function App() {
   );
   useSimulation(canvasElement);
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
-      <canvas
-        ref={(e) => {
-          setCanvasElement(e);
-        }}
-        style={{
-          backgroundColor: "black",
-        }}
-      />
-    </div>
+    <canvas
+      ref={(e) => {
+        setCanvasElement(e);
+      }}
+      style={{
+        backgroundColor: "black",
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+      }}
+    />
   );
 }
 

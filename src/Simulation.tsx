@@ -342,13 +342,6 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
 
   twgl.addExtensionsToContext(gl);
 
-  const width = 1024;
-  const height = 1024;
-  canvas.width = width;
-  canvas.height = height;
-
-  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-
   const VERTEX = glsl`
     in vec2 indexPos;
     in vec2 pos;
@@ -377,7 +370,7 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
     out vec4 fragColor;
 
     const float SIZE = 0.005;
-    const vec2 screenSize = vec2(${width}.0, ${height}.0);
+    uniform vec2 screenSize;
 
     in vec4 outColor;
     in vec4 outProperties;
@@ -463,12 +456,16 @@ export const createSimulation = (canvas: HTMLCanvasElement) => {
 
     particleSimulation.update(...readMouseState());
 
+    twgl.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
     gl.useProgram(programInfo.program);
 
     twgl.setUniforms(programInfo, {
       textureTransform: particleSimulation.textureTransform,
       textureColor: particleSimulation.textureColor,
       textureProperties: particleSimulation.textureProperties,
+      screenSize: [gl.drawingBufferWidth, gl.drawingBufferHeight],
     });
 
     twgl.setBuffersAndAttributes(gl, programInfo, indexInfo);
