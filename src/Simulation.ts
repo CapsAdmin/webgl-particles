@@ -3,6 +3,17 @@ import { FramebufferInfo } from "twgl.js";
 import { mouseEvents, renderLoop } from "./Events";
 import { glsl, twgl } from "./WebGL";
 
+const distanceFunction = `
+float particleDistance(vec2 dir) {
+  float linear = sqrt((dir.x * dir.x + dir.y * dir.y) / 8.0);
+  
+  float attractionForce = pow(linear, 0.2) - 1.0;
+  float stiffness = 100000.0;
+  const float radius = 1.0;
+  float repulsionForce = pow(-linear + 1.0, (1.0 / radius) * 200.0);
+  return attractionForce * 2.5 + repulsionForce * stiffness;
+}`
+
 const VERTEX = glsl`
 in vec2 pos;
 
@@ -25,37 +36,43 @@ uniform int particleCount;
 uniform int textureSize;
 
 vec4 fetchFromIndex(sampler2D texture, int index) {
-    return texelFetch(texture, ivec2(index%textureSize, index/textureSize), 0);
+  return texelFetch(texture, ivec2(index%textureSize, index/textureSize), 0);
+}
+
+vec4 fetchFromXY(sampler2D texture) {
+  return texelFetch(texture, ivec2(gl_FragCoord.x, gl_FragCoord.y), 0);
 }
 
 vec4 getTransform(int index) {
-    return fetchFromIndex(transformTexture, index);
+  return fetchFromIndex(transformTexture, index);
 }
 vec4 getColor(int index) {
-    return fetchFromIndex(colorTexture, index);
+  return fetchFromIndex(colorTexture, index);
 }
 vec4 getProperties(int index) {
-    return fetchFromIndex(propertyTexture, index);
+  return fetchFromIndex(propertyTexture, index);
 }
 
-float particleDistance(vec2 dir) {
-    float linear = sqrt((dir.x * dir.x + dir.y * dir.y) / 8.0);
+vec4 getTransform() {
+  return fetchFromXY(transformTexture);
+}
+vec4 getColor() {
+  return fetchFromXY(colorTexture);
+}
+vec4 getProperties() {
+  return fetchFromXY(propertyTexture);
+}
+
+
+${distanceFunction}
+
+
+vec4 updateTransform() {
+    vec2 pos = getTransform().xy;
+    vec2 vel = getTransform().zw;
+    vec3 color = getColor().rgb;
+    vec2 props = getProperties().xy;
     
-    float attractionForce = pow(linear, 0.2) - 1.0;
-    float stiffness = 100000.0;
-    const float radius = 1.0;
-    float repulsionForce = pow(-linear + 1.0, (1.0 / radius) * 200.0);
-    return attractionForce * 2.5 + repulsionForce * stiffness;
-}
-
-
-vec4 updateTransform(int INDEX) {
-    vec2 pos = getTransform(INDEX).xy;
-    vec2 vel = getTransform(INDEX).zw;
-
-    vec3 color = getColor(INDEX).rgb;
-
-    vec2 props = getProperties(INDEX).xy;
     float gravity = props.x;
     float radius = props.y;
 
@@ -138,9 +155,9 @@ void main() {
         discard;
     }
 
-    transformOut = updateTransform(indexParticle);
-    colorOut = getColor(indexParticle);
-    propertyOut = getProperties(indexParticle);
+    transformOut = updateTransform();
+    colorOut = getColor();
+    propertyOut = getProperties();
 }
 `;
 
@@ -307,6 +324,45 @@ export const createParticleSimulation = (
     textureTransform: framebuffers[0].attachments[0],
     textureColor: framebuffers[0].attachments[1],
     textureProperties: framebuffers[0].attachments[2],
+
+    renderDistanceFunction(gl: WebGL2RenderingContext) {
+
+      const programInfo = twgl.createProgramInfo(gl, [VERTEX, glsl`
+        out vec4 fragColor;
+        uniform vec2 screenSize;
+
+        ${distanceFunction}
+
+
+        void main() {
+          vec2 screenPos = (gl_FragCoord.xy/screenSize)*2.0-1.0;
+
+          float dist = particleDistance(screenPos);
+          fragColor = vec4(-dist, 0.0, dist, 1.0);
+        }
+      `], {
+        errorCallback: (err) => {
+          throw err;
+        },
+      });
+
+      const bufferInfo = twgl.createBufferInfoFromArrays(gl, {
+        pos: {
+          numComponents: 2,
+          data: [-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0],
+        },
+      });
+      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      gl.useProgram(programInfo.program);
+
+      twgl.setUniforms(programInfo, {
+        screenSize: [gl.drawingBufferWidth, gl.drawingBufferHeight],
+      });
+
+      twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
+
+      twgl.drawBufferInfo(gl, bufferInfo);
+    },
 
     update(mx: number, my: number, pressed: number) {
       gl.useProgram(programInfo.program);
