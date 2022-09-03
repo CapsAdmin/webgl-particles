@@ -21,8 +21,8 @@ float normalizedLength(vec3 v) {
   return len;
 }
 
-float particleDistance(vec2 dir) {
-  float size = pow(0.1 / 5.0, 2.0)*3.0;
+float particleDistance(vec2 dir, float test) {
+  float size = pow(test*2.0, 2.0)*3.0;
 
   float outterRadius = -normalizedLength(dir) + 1.0;
   outterRadius = pow(outterRadius, 160.0);
@@ -106,12 +106,12 @@ vec4 updateTransform() {
     vec2 pos = getTransform().xy;
     vec2 vel = getTransform().zw;
     vec3 color = getColor().rgb;
-    vec2 props = getProperties().xy;
+    vec4 props = getProperties();
     
     float gravity = props.x;
-    float radius = props.y;
+    float size = props.y;
+    float friction = props.z;
 
-    float friction = 0.5;
     float heat = 0.0001;
 
     const bool wrapAround = true;
@@ -123,7 +123,7 @@ vec4 updateTransform() {
         
         //float colorDistance = cos(length(otherColor.rgb - color.gbr - color.brg));
         float colorDistance = sin(length(otherColor.rgb + color.rgb + otherColor.brg + color.brg));
-        float attraction = particleDistance(direction);
+        float attraction = particleDistance(direction, size);
 
         vel += direction * attraction * gravity * colorDistance * 0.05;
     }
@@ -138,9 +138,9 @@ vec4 updateTransform() {
         direction /= distance;
       }
 
-      float attraction = particleDistance(direction) * mouse.z;
+      float attraction = particleDistance(direction, size) * mouse.z;
 
-      vel += direction * attraction * 100000000.0;
+      vel += direction * attraction * 10000000.0;
   }
     //vx += (Math.random() * 2 - 1) * heat;
     //vy += (Math.random() * 2 - 1) * heat;
@@ -275,7 +275,7 @@ export const createParticleSimulation = (
     textureSize,
     (i) => {
       if (i < particleCount) {
-        return [0.01, 0, 0, 0];
+        return [0.002, 0.01, 0.8, 0];
       }
     },
     gl
@@ -371,7 +371,7 @@ export const createParticleSimulation = (
         void main() {
           vec2 screenPos = (gl_FragCoord.xy/screenSize)*2.0-1.0;
 
-          float dist = particleDistance(screenPos);
+          float dist = particleDistance(screenPos, 0.1);
           fragColor = vec4(-dist, 0.0, dist, 1.0);
         }
       `], {

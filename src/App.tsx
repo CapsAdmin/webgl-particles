@@ -7,7 +7,9 @@ function App() {
   const canvas2Ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const gl = canvasRef.current?.getContext("webgl2");
+    const gl = canvasRef.current?.getContext("webgl2", {
+      preserveDrawingBuffer: true,
+    });
     const gl2 = canvas2Ref.current?.getContext("webgl2");
     if (!gl || !gl2) return;
 
