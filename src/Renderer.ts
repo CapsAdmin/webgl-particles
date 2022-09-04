@@ -3,48 +3,50 @@ import { mouseEvents, renderLoop } from "./Events";
 import { createParticleSimulation } from "./Simulation";
 import { glsl, twgl } from "./WebGL";
 
-const VERTEX = glsl`
-in vec2 indexPos;
-in vec2 pos;
 
-uniform sampler2D textureTransform;
-uniform sampler2D textureColor;
-uniform sampler2D textureProperties;
-
-out vec4 outColor;
-out vec4 outProperties;
-out vec4 outTransform;
-
-void main() {
-    vec4 transform = texelFetch(textureTransform, ivec2(indexPos.y, indexPos.x), 0);
-    outTransform = transform;
-    outColor = texelFetch(textureColor, ivec2(indexPos.y, indexPos.x), 0);
-    outProperties = texelFetch(textureProperties, ivec2(indexPos.y, indexPos.x), 0);
-
-    gl_Position = vec4(pos * outProperties.y/2.0 + transform.xy , 0, 1);
-}
-`;
-
-const FRAGMENT = glsl`
-out vec4 fragColor;
-
-uniform vec2 screenSize;
-
-in vec4 outColor;
-in vec4 outProperties;
-in vec4 outTransform;
-
-void main() {
-    float size = outProperties.y/2.0;
-    vec2 screenPos = (gl_FragCoord.xy/screenSize)*2.0-1.0;
-    float alpha = -length(outTransform.xy - screenPos)*(1.0/size)+1.0;
-
-    alpha = pow(alpha, 1.0);
-
-    fragColor = vec4(outColor.rgb, alpha);
-}
-`;
 export const createParticleSimulationRenderer = (gl: WebGL2RenderingContext, particleSimulation: ReturnType<typeof createParticleSimulation>) => {
+    const VERTEX = glsl`
+    in vec2 indexPos;
+    in vec2 pos;
+    
+    uniform sampler2D textureTransform;
+    uniform sampler2D textureColor;
+    uniform sampler2D textureProperties;
+    
+    out vec4 outColor;
+    out vec4 outProperties;
+    out vec4 outTransform;
+    
+    void main() {
+        vec4 transform = texelFetch(textureTransform, ivec2(indexPos.y, indexPos.x), 0);
+        outTransform = transform;
+        outColor = texelFetch(textureColor, ivec2(indexPos.y, indexPos.x), 0);
+        outProperties = texelFetch(textureProperties, ivec2(indexPos.y, indexPos.x), 0);
+        float size = outProperties.y/2.0 + 0.01;
+        gl_Position = vec4(pos * size + transform.xy , 0, 1);
+    }
+    `;
+
+    const FRAGMENT = glsl`
+    out vec4 fragColor;
+    
+    uniform vec2 screenSize;
+    
+    in vec4 outColor;
+    in vec4 outProperties;
+    in vec4 outTransform;
+    
+    void main() {
+        float size = outProperties.y/2.0 + 0.01;
+        vec2 screenPos = (gl_FragCoord.xy/screenSize)*2.0-1.0;
+        float alpha = -length(outTransform.xy - screenPos)*(1.0/size)+1.0;
+    
+        alpha = pow(alpha, 0.8);
+    
+        fragColor = vec4(outColor.rgb, alpha);
+    }
+    `;
+
     twgl.addExtensionsToContext(gl);
 
     const programInfo = twgl.createProgramInfo(gl, [VERTEX, FRAGMENT], {
@@ -73,7 +75,7 @@ export const createParticleSimulationRenderer = (gl: WebGL2RenderingContext, par
         }
     }
 
-    const indexInfo = twgl.createBufferInfoFromArrays(gl, {
+    const indexBuffer = twgl.createBufferInfoFromArrays(gl, {
         indexPos: {
             numComponents: 2,
             data: particleIndices,
@@ -99,7 +101,7 @@ export const createParticleSimulationRenderer = (gl: WebGL2RenderingContext, par
         particleQuads[idx + 11] = 1.0;
     }
 
-    const posInfo = twgl.createBufferInfoFromArrays(gl, {
+    const quadBuffer = twgl.createBufferInfoFromArrays(gl, {
         pos: {
             numComponents: 2,
             data: particleQuads,
@@ -109,6 +111,8 @@ export const createParticleSimulationRenderer = (gl: WebGL2RenderingContext, par
     const [readMouseState, removeMouseEvents] = mouseEvents(gl.canvas);
 
     const renderSimulation = () => {
+
+
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.useProgram(programInfo.program);
@@ -120,20 +124,18 @@ export const createParticleSimulationRenderer = (gl: WebGL2RenderingContext, par
             screenSize: [gl.drawingBufferWidth, gl.drawingBufferHeight],
         });
 
-        twgl.setBuffersAndAttributes(gl, programInfo, indexInfo);
-        twgl.setBuffersAndAttributes(gl, programInfo, posInfo);
+        twgl.setBuffersAndAttributes(gl, programInfo, indexBuffer);
+        twgl.setBuffersAndAttributes(gl, programInfo, quadBuffer);
 
         gl.enable(gl.BLEND);
         gl.blendEquation(gl.FUNC_ADD);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-        twgl.drawBufferInfo(gl, indexInfo);
+        twgl.drawBufferInfo(gl, indexBuffer);
         gl.disable(gl.BLEND);
     }
 
 
     const stopRendering = renderLoop(() => {
-        twgl.resizeCanvasToDisplaySize(gl.canvas);
-
         particleSimulation.update(...readMouseState());
 
         renderSimulation()
