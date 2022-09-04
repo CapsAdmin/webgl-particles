@@ -1,13 +1,12 @@
 import { FramebufferInfo } from "twgl.js";
-import { mouseEvents, renderLoop } from "./Events";
+import { mouseEvents, renderLoop } from "./other/Events";
 import { createParticleSimulation } from "./Simulation";
-import { glsl, twgl } from "./WebGL";
-
+import { glsl, twgl } from "./other/WebGL";
 
 export const createParticleSimulationRenderer = (
     gl: WebGL2RenderingContext,
     particleSimulation: ReturnType<typeof createParticleSimulation>,
-    getView?: () => [number, number, number]
+    getView?: () => readonly [number, number, number]
 ) => {
     if (!getView) {
         getView = (() => [0, 0, 1]);

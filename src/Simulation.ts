@@ -1,7 +1,7 @@
 import chroma from "chroma-js";
 import { FramebufferInfo } from "twgl.js";
-import { mouseEvents, renderLoop } from "./Events";
-import { glsl, twgl } from "./WebGL";
+import { mouseEvents, renderLoop } from "./other/Events";
+import { glsl, twgl } from "./other/WebGL";
 
 
 
@@ -149,34 +149,36 @@ vec4 updateTransform() {
     vel += direction * distance * -0.001;
 }
 
+float bounds = 10.0;
+
   // wall bounce
   if (wrapAround) {
-      if (pos.x > 1.0) {
-      pos.x = -1.0;
-      } else if (pos.x < -1.0) {
-      pos.x = 1.0;
+      if (pos.x > bounds) {
+      pos.x = -bounds;
+      } else if (pos.x < -bounds) {
+      pos.x = bounds;
       }
 
-      if (pos.y >= 1.0) {
-      pos.y = -1.0;
-      } else if (pos.y < -1.0) {
-      pos.y = 1.0;
+      if (pos.y >= bounds) {
+      pos.y = -bounds;
+      } else if (pos.y < -bounds) {
+      pos.y = bounds;
       }
   } else {
-      if (pos.x > 1.0) {
-      pos.x = 1.0;
-      vel.x *= -1.0;
-      } else if (pos.x < -1.0) {
-      pos.x = -1.0;
-      vel.x *= -1.0;
+      if (pos.x > bounds) {
+      pos.x = bounds;
+      vel.x *= -bounds;
+      } else if (pos.x < -bounds) {
+      pos.x = -bounds;
+      vel.x *= -bounds;
       }
 
-      if (pos.y > 1.0) {
-      pos.y = 1.0;
-      vel.y *= -1.0;
-      } else if (pos.y < -1.0) {
-      pos.y = -1.0;
-      vel.y *= -1.0;
+      if (pos.y > bounds) {
+      pos.y = bounds;
+      vel.y *= -bounds;
+      } else if (pos.y < -bounds) {
+      pos.y = -bounds;
+      vel.y *= -bounds;
       }
   }
 
