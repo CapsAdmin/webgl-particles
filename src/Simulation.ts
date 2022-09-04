@@ -6,23 +6,35 @@ import { glsl, twgl } from "./WebGL";
 
 
 export const defaultConfig = {
-  particleCount: 20000,
-  getGravity: (i: number, max: number) => 0.1,
-  getSize: (i: number, max: number) => 0.0001,
-  getFriction: (i: number, max: number) => 0.4,
-  getColor: (i: number, max: number) => chroma.hsv((i / max) * 360, 0.9, 1).gl(),
-  distanceFunction: `
-    float particleDistance(vec2 dir, float size) {
-      float dist = length(dir);
-      if (dist == 0.0) {
-        return 0.0;
-      }
-      float len = -(dist / sqrt(2.0)) + 1.0;
-      if (dist < size) {
-        return len;
-      }
-      return min(-pow(len*1.25, 1.5),0.0);
-    }
+  particleCount: 2,
+  buildParticles:
+    `p.position = [
+  Math.sin((i / max) * Math.PI * 2) / 2, 
+  Math.cos((i / max) * Math.PI * 2) / 2
+]
+p.velocity = [0, 0]
+p.gravity = 0.001
+p.size = 0.1
+p.friction = 0.99
+p.color = chroma.hsv((i / max) * 360, 0.9, 1).gl()`,
+  onParticleState: undefined as undefined | ((i: number, state: readonly [Float32Array, Float32Array, Float32Array]) => void),
+  distanceFunction:
+    `float particleDistance(vec2 dir, float size) {
+  float dist = length(dir);
+  if (dist == 0.0) {
+    return 0.0;
+  }
+  
+  float len = -(dist / sqrt(2.0)) + 1.0;
+
+  // repulsion
+  if (dist < size) {
+    return len;
+  }
+
+  // attraction
+  return min(-len, 0.0);
+}
   `
 };
 
@@ -30,22 +42,9 @@ export type SimulationConfig = typeof defaultConfig;
 
 export const createParticleSimulation = (
   gl: WebGL2RenderingContext,
-  configOverride: SimulationConfig
+  configOverride?: SimulationConfig
 ) => {
   const config = { ...defaultConfig, ...configOverride };
-
-  const vec1 = [-1, -1, -1];
-  const vec2 = [1, 1, 1];
-
-  const length = (vec: number[]) => {
-    return (vec.reduce((acc, v) => acc + v * v, 0));
-  }
-  const sub = (vec1: number[], vec2: number[]) => {
-    return vec1.map((v, i) => v - vec2[i]);
-  }
-
-  console.log(length(sub(vec1, vec2)));
-
 
   const VERTEX = glsl`
 in vec2 pos;
@@ -114,15 +113,7 @@ vec4 updateTransform() {
 
   const bool wrapAround = true;
 
-  if (mouse.z != 0.0) {
-    vec2 direction = pos - mouse.xy;
-    float distance = length(direction);
-    if (distance > 0.0) {
-      direction /= distance;
-    }
-
-    vel += direction * distance * -0.1;
-}
+ 
 
   for (int i = 0; i < particleCount; i++) {
       vec2 otherPos = getTransform(i).xy;
@@ -133,12 +124,10 @@ vec4 updateTransform() {
       float attraction = particleDistance(direction, size);
 
       float colorDistance = sin(length(color.rgb + otherColor.rgb + attraction)*0.005)*0.5;
-      attraction *= colorDistance;
+      //attraction *= colorDistance;
 
       vel += direction * attraction * gravity;
   }
-
-
 
 
   //vx += (Math.random() * 2 - 1) * heat;
@@ -148,6 +137,17 @@ vec4 updateTransform() {
 
 
   vel *= friction;
+
+
+  if (mouse.z != 0.0) {
+    vec2 direction = pos - mouse.xy;
+    float distance = length(direction);
+    if (distance > 0.0) {
+      direction /= distance;
+    }
+
+    vel += direction * distance * -0.001;
+}
 
   // wall bounce
   if (wrapAround) {
@@ -244,15 +244,34 @@ void main() {
     return out;
   };
 
+
+  type Particle = {
+    position: [number, number],
+    velocity: [number, number],
+    gravity: number,
+    size: number,
+    friction: number,
+    color: [number, number, number, number]
+  }
+  const buildParticle = eval("(i, max) => { const p = {}\n " + config.buildParticles + "\n return p }") as (i: number, max: number) => Particle
+
+  const particles: Particle[] = []
+
+  globalThis.chroma = chroma
+
+  for (let i = 0; i < config.particleCount; i++) {
+    particles.push(buildParticle(i, config.particleCount))
+  }
+
   const transformTexture = createDoubleBufferTexture(
     textureSize,
     (i) => {
       if (i < config.particleCount) {
         return [
-          Math.sin((i / config.particleCount) * Math.PI * 2) / 2,
-          Math.cos((i / config.particleCount) * Math.PI * 2) / 2,
-          0,
-          0,
+          particles[i].position[0],
+          particles[i].position[1],
+          particles[i].velocity[0],
+          particles[i].velocity[1],
         ];
       }
     },
@@ -263,8 +282,7 @@ void main() {
     textureSize,
     (i) => {
       if (i < config.particleCount) {
-        let [r, g, b, a] = config.getColor(i, config.particleCount);
-        return [r, g, b, a];
+        return particles[i].color;
       }
     },
     gl
@@ -274,7 +292,12 @@ void main() {
     textureSize,
     (i) => {
       if (i < config.particleCount) {
-        return [config.getGravity(i, config.particleCount), config.getSize(i, config.particleCount), config.getFriction(i, config.particleCount), 0];
+        return [
+          particles[i].gravity,
+          particles[i].size,
+          particles[i].friction,
+          0,
+        ];
       }
     },
     gl
@@ -319,7 +342,7 @@ void main() {
     );
   }
 
-  const getParticleState = (index: number, tex: WebGLTexture) => {
+  const getState = (index: number, tex: WebGLTexture) => {
     const fb = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.framebufferTexture2D(
@@ -357,6 +380,10 @@ void main() {
     textureTransform: framebuffers[0].attachments[0],
     textureColor: framebuffers[0].attachments[1],
     textureProperties: framebuffers[0].attachments[2],
+
+    getState(index: number) {
+      return [getState(index, this.textureTransform), getState(index, this.textureColor), getState(index, this.textureProperties)] as const
+    },
 
     renderDistanceFunction(gl: WebGL2RenderingContext) {
 
@@ -420,6 +447,13 @@ void main() {
       this.textureProperties = framebuffers[1].attachments[2];
 
       framebuffers.reverse();
+
+      if (config.onParticleState) {
+        console.log("read state")
+        for (let i = 0; i < config.particleCount; i++) {
+          config.onParticleState(i, this.getState(i));
+        }
+      }
     },
   };
 };
