@@ -6,6 +6,7 @@ import {
   createTheme,
   CssBaseline,
   Paper,
+  Slider,
   Switch,
   Table,
   TableBody,
@@ -89,10 +90,27 @@ function App() {
             <Card>
               <Stack padding={1} flex={1}>
                 <CanvasMap
+                  viewSize={512}
+                  worldScale={config.worldScale}
                   viewRef={viewRef}
                   canvasRef={canvasRef}
                   error={error}
                 />
+                <Box>
+                  <Typography variant="h5">world scale</Typography>
+                  <Slider
+                    min={1}
+                    max={50}
+                    valueLabelDisplay="auto"
+                    value={config.worldScale}
+                    onChange={(e, num) => {
+                      setConfig({
+                        ...config,
+                        worldScale: Math.round(num as number),
+                      });
+                    }}
+                  />
+                </Box>
               </Stack>
             </Card>
 
@@ -114,6 +132,7 @@ function App() {
                     { value: 20000, label: "20k" },
                     { value: 30000, label: "30k" },
                   ]}
+                  value={config.particleCount}
                   onChange={(num) => {
                     setConfig({ ...config, particleCount: Math.round(num) });
                   }}

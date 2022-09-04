@@ -1,5 +1,5 @@
 import { Slider } from "@mui/material";
-import "leaflet/dist/leaflet.css";
+import { useState } from "react";
 
 const lerp = (a: number, b: number, t: number) => {
   return a * (1 - t) + b * t;
@@ -22,10 +22,35 @@ const lerpBetweenPoints = (numbers: number[], t: number) => {
   return lerp(numbers[index], numbers[index2], t2);
 };
 
+const valueToIndex = (value: number, steps: number[]) => {
+  for (let step of steps) {
+    if (value <= step) {
+      const index = steps.indexOf(step);
+      if (index == 0) {
+        return 1;
+      }
+      const prevIdnex = index - 1;
+      const max = steps[steps.length - 1];
+      let a = steps[prevIdnex] / max;
+      let b = step / max;
+      console.log(index + 1 + a / b);
+      return index + a / b;
+    }
+  }
+  return 1;
+};
+
 export const ExponentialSlider = (props: {
   steps: Array<{ label: string; value: number }>;
   onChange: (num: number) => void;
+  value: number;
 }) => {
+  const [val, setVal] = useState(
+    valueToIndex(
+      props.value,
+      props.steps.map((s) => s.value)
+    )
+  );
   return (
     <Slider
       marks={props.steps.map(({ label }, i) => ({
@@ -36,6 +61,7 @@ export const ExponentialSlider = (props: {
       min={1}
       max={props.steps.length}
       step={0.00001}
+      value={val}
       valueLabelFormat={(f) => {
         let num = (f as number) / props.steps.length;
         return lerpBetweenPoints(
@@ -50,6 +76,7 @@ export const ExponentialSlider = (props: {
           num
         );
         props.onChange(val);
+        setVal(f as number);
       }}
     ></Slider>
   );

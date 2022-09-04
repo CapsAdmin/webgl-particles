@@ -6,7 +6,8 @@ import { glsl, twgl } from "./other/WebGL";
 
 
 export const defaultConfig = {
-  particleCount: 2,
+  particleCount: 15000,
+  worldScale: 15,
   buildParticles:
     `p.position = [
   Math.sin((i / max) * Math.PI * 2) / 2, 
@@ -66,6 +67,7 @@ layout(location=2) out vec4 propertyOut;
 
 uniform int particleCount;
 uniform int textureSize;
+uniform float worldScale;
 
 vec4 fetchFromIndex(sampler2D texture, int index) {
 return texelFetch(texture, ivec2(index%textureSize, index/textureSize), 0);
@@ -123,8 +125,8 @@ vec4 updateTransform() {
       //float colorDistance = cos(length(otherColor.rgb - color.gbr - color.brg));
       float attraction = particleDistance(direction, size);
 
-      float colorDistance = sin(length(color.rgb + otherColor.rgb + attraction)*0.005)*0.5;
-      //attraction *= colorDistance;
+      float colorDistance = cos(length(color.rgb + otherColor.rgb + attraction)*0.05)*0.5;
+      attraction *= colorDistance;
 
       vel += direction * attraction * gravity;
   }
@@ -149,7 +151,7 @@ vec4 updateTransform() {
     vel += direction * distance * -0.001;
 }
 
-float bounds = 10.0;
+float bounds = worldScale;
 
   // wall bounce
   if (wrapAround) {
@@ -438,6 +440,7 @@ void main() {
         propertyTexture: framebuffers[0].attachments[2],
         textureSize: textureSize,
         particleCount: config.particleCount,
+        worldScale: config.worldScale,
       });
 
       twgl.drawBufferInfo(gl, bufferInfo);
