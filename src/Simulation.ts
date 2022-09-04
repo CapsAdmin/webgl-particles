@@ -35,14 +35,14 @@ p.color = chroma.hsv((i / max) * 360, 0.9, 1).gl()`,
   // attraction
   return min(-len, 0.0);
 }
-  `
+  `,
 };
 
 export type SimulationConfig = typeof defaultConfig;
 
 export const createParticleSimulation = (
   gl: WebGL2RenderingContext,
-  configOverride?: SimulationConfig
+  configOverride?: SimulationConfig,
 ) => {
   const config = { ...defaultConfig, ...configOverride };
 
@@ -430,7 +430,7 @@ void main() {
       twgl.bindFramebufferInfo(gl, framebuffers[1]);
       twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
       twgl.setUniforms(programInfo, {
-        mouse: [mx, my, pressed],
+        mouse: [0, 0, 0],
         transformTexture: framebuffers[0].attachments[0],
         colorTexture: framebuffers[0].attachments[1],
         propertyTexture: framebuffers[0].attachments[2],

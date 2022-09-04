@@ -6,7 +6,6 @@ import {
   createTheme,
   CssBaseline,
   Paper,
-  Slider,
   Switch,
   Table,
   TableBody,
@@ -19,11 +18,14 @@ import {
   Typography,
 } from "@mui/material";
 import { Stack } from "@mui/system";
-import { useEffect, useRef, useState } from "react";
+import { Map } from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { RefObject, useEffect, useRef, useState } from "react";
+import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import { ExponentialSlider } from "./ExponentialSlider";
 import { registerGLSL } from "./GLSLLanguage";
 import { createParticleSimulationRenderer } from "./Renderer";
 import { createParticleSimulation, defaultConfig } from "./Simulation";
-
 const darkTheme = createTheme({
   palette: {
     mode: "dark",
@@ -45,64 +47,6 @@ const formatProperty = (value: number) => {
   return value.toFixed(3);
 };
 
-const formatPosition = (x: number, y: number) => {
-  return `(${formatPoint(x)},${formatPoint(y)})`;
-};
-
-const lerp = (a: number, b: number, t: number) => {
-  return a * (1 - t) + b * t;
-};
-
-const lerpBetweenPoints = (numbers: number[], t: number) => {
-  // interpolate between variable numbers, t is 0 to 1 and output is the result
-  // t = 0 would be the first index
-  // t = 1 would be the last index
-
-  let len = numbers.length;
-
-  // find the index of the first number
-  const index = Math.floor(t * len - 1);
-  // find the index of the second number
-  const index2 = Math.min(index + 1, len - 1);
-  // find the t value between the two numbers
-  const t2 = (t * len) % 1;
-  // interpolate between the two numbers
-  return lerp(numbers[index], numbers[index2], t2);
-};
-
-const ExponentialSlider = (props: {
-  steps: Array<{ label: string; value: number }>;
-  onChange: (num: number) => void;
-}) => {
-  return (
-    <Slider
-      marks={props.steps.map(({ label }, i) => ({
-        value: i + 1,
-        label,
-      }))}
-      valueLabelDisplay="auto"
-      min={1}
-      max={props.steps.length}
-      step={0.00001}
-      valueLabelFormat={(f) => {
-        let num = (f as number) / props.steps.length;
-        return lerpBetweenPoints(
-          props.steps.map(({ value }) => value),
-          num
-        ).toFixed(0);
-      }}
-      onChange={(event, f) => {
-        let num = (f as number) / props.steps.length;
-        let val = lerpBetweenPoints(
-          props.steps.map(({ value }) => value),
-          num
-        );
-        props.onChange(val);
-      }}
-    ></Slider>
-  );
-};
-
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvas2Ref = useRef<HTMLCanvasElement>(null);
@@ -112,6 +56,8 @@ function App() {
   const [particleState, setParticleState] = useState<
     Array<[Float32Array, Float32Array, Float32Array]>
   >([]);
+
+  const mapRef = useRef<Map | null>(null);
 
   useEffect(() => {
     const gl = canvasRef.current?.getContext("webgl2", {
@@ -125,7 +71,32 @@ function App() {
 
       particleSimulation.renderDistanceFunction(gl2);
 
-      let destroy = createParticleSimulationRenderer(gl, particleSimulation);
+      let destroy = createParticleSimulationRenderer(
+        gl,
+        particleSimulation,
+        () => {
+          let map = mapRef.current;
+          if (map) {
+            const div = map._proxy as HTMLDivElement;
+            if (!div) return [0, 0, 1] as const;
+
+            const matrix = window.getComputedStyle(div).transform;
+            if (!matrix) return [0, 0, 1] as const;
+            const match = matrix.match(/matrix\(.*,(.*)\)/);
+            if (!match) return [0, 0, 1] as const;
+            const val = parseFloat(match[1]);
+
+            let mapZoom = (val * (1 / 0.6359804005193673)) / 52756500; // map.getZoom()
+
+            let zoom = mapZoom;
+            let x = -map.getCenter().lng * 800 * Math.pow(zoom, 1);
+            let y = -map.getCenter().lat * 800 * Math.pow(zoom, 1);
+            return [x, y, zoom] as const;
+          }
+
+          return [0, 0, 1] as const;
+        }
+      );
       setError("");
       return destroy;
     } catch (err) {
@@ -147,14 +118,30 @@ function App() {
             <Card>
               <Stack padding={1} flex={1}>
                 <div style={{ position: "relative" }}>
-                  <canvas
-                    width={512}
-                    height={512}
-                    ref={canvasRef}
-                    style={{
-                      backgroundColor: "black",
-                    }}
-                  />
+                  <MapContainer
+                    ref={mapRef}
+                    center={[0, 0]}
+                    zoom={112}
+                    scrollWheelZoom={true}
+                    style={{ height: 512, width: 512 }}
+                  >
+                    <TileLayer
+                      zIndex={-1}
+                      opacity={0}
+                      attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <canvas
+                      width={512}
+                      height={512}
+                      ref={canvasRef}
+                      style={{
+                        backgroundColor: "black",
+                        position: "absolute",
+                        zIndex: 10,
+                      }}
+                    />
+                  </MapContainer>
                   <Typography
                     align="left"
                     style={{
@@ -259,12 +246,10 @@ function App() {
                 onChange={(e, checked) => {
                   setReadParticleState(checked);
                   if (checked) {
-                    console.log("checked!");
                     setConfig({
                       ...config,
                       onParticleState: (i, state) => {
-                        console.log(i, state);
-                        particleState[i] = state;
+                        (particleState as any)[i] = state;
                         setParticleState([...particleState]);
                       },
                     });

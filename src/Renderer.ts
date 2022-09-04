@@ -4,11 +4,19 @@ import { createParticleSimulation } from "./Simulation";
 import { glsl, twgl } from "./WebGL";
 
 
-export const createParticleSimulationRenderer = (gl: WebGL2RenderingContext, particleSimulation: ReturnType<typeof createParticleSimulation>) => {
+export const createParticleSimulationRenderer = (
+    gl: WebGL2RenderingContext,
+    particleSimulation: ReturnType<typeof createParticleSimulation>,
+    getView?: () => [number, number, number]
+) => {
+    if (!getView) {
+        getView = (() => [0, 0, 1]);
+    }
     const VERTEX = glsl`
     in vec2 indexPos;
     in vec2 pos;
     
+    uniform vec3 view;
     uniform sampler2D textureTransform;
     uniform sampler2D textureColor;
     uniform sampler2D textureProperties;
@@ -18,12 +26,12 @@ export const createParticleSimulationRenderer = (gl: WebGL2RenderingContext, par
     out vec4 outTransform;
     
     void main() {
-        vec4 transform = texelFetch(textureTransform, ivec2(indexPos.y, indexPos.x), 0);
-        outTransform = transform;
+        outTransform = texelFetch(textureTransform, ivec2(indexPos.y, indexPos.x), 0);
         outColor = texelFetch(textureColor, ivec2(indexPos.y, indexPos.x), 0);
         outProperties = texelFetch(textureProperties, ivec2(indexPos.y, indexPos.x), 0);
-        float size = outProperties.y/2.0 + 0.01;
-        gl_Position = vec4(pos * size + transform.xy , 0, 1);
+        
+        float size = (outProperties.y/2.0 + 0.01) * view.z;
+        gl_Position = vec4((((pos) * size) + (outTransform.xy * view.z) + view.xy), 0, 1);
     }
     `;
 
@@ -32,14 +40,18 @@ export const createParticleSimulationRenderer = (gl: WebGL2RenderingContext, par
     
     uniform vec2 screenSize;
     
+    uniform vec3 view;
+
     in vec4 outColor;
     in vec4 outProperties;
     in vec4 outTransform;
     
     void main() {
-        float size = outProperties.y/2.0 + 0.01;
+        float size = (outProperties.y/2.0 + 0.01) * view.z;
         vec2 screenPos = (gl_FragCoord.xy/screenSize)*2.0-1.0;
-        float alpha = -length(outTransform.xy - screenPos)*(1.0/size)+1.0;
+        vec2 pos = outTransform.xy * view.z;
+        pos += view.xy;
+        float alpha = -length(pos - screenPos)*(1.0/size)+1.0;
     
         alpha = pow(alpha, 0.8);
     
@@ -118,6 +130,7 @@ export const createParticleSimulationRenderer = (gl: WebGL2RenderingContext, par
         gl.useProgram(programInfo.program);
 
         twgl.setUniforms(programInfo, {
+            view: getView!(),
             textureTransform: particleSimulation.textureTransform,
             textureColor: particleSimulation.textureColor,
             textureProperties: particleSimulation.textureProperties,
