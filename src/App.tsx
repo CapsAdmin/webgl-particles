@@ -142,22 +142,7 @@ function App() {
               </Card>
 
               <Box>
-                <Typography variant="body1">world scale</Typography>
-                <Slider
-                  min={1}
-                  max={50}
-                  valueLabelDisplay="auto"
-                  value={config.worldScale}
-                  onChange={(e, num) => {
-                    updateConfig({
-                      worldScale: Math.round(num as number),
-                    });
-                  }}
-                />
-              </Box>
-
-              <Box>
-                <Typography variant="body1">count</Typography>
+                <Typography variant="body1">particle count</Typography>
                 <ExponentialSlider
                   steps={[
                     { value: 1, label: "1" },
@@ -178,14 +163,34 @@ function App() {
                 />
               </Box>
 
-              <Button
-                onClick={() => {
-                  updateConfig({ ...defaultConfig });
-                }}
-                variant="contained"
-              >
-                reset
-              </Button>
+              <Box>
+                <Typography variant="body1">world scale</Typography>
+                <Slider
+                  min={1}
+                  max={50}
+                  valueLabelDisplay="auto"
+                  value={config.worldScale}
+                  onChange={(e, num) => {
+                    updateConfig({
+                      worldScale: Math.round(num as number),
+                    });
+                  }}
+                />
+              </Box>
+
+              <Stack spacing={2}>
+                <Button
+                  onClick={() => {
+                    updateConfig({ ...defaultConfig });
+                  }}
+                  variant="contained"
+                >
+                  reset settings
+                </Button>
+                <Typography variant="body1">
+                  your settings and code is stored in local storage
+                </Typography>
+              </Stack>
             </Stack>
 
             <Stack padding={3} spacing={2} flex={1}>

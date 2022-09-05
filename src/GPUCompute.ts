@@ -169,7 +169,6 @@ export const createFragmentComputeShader = (
 
 
     const dataTextures = []
-    console.log(items)
     const getValue = (particleIndex: number, textureIndex: number, offset: number) => {
         const lookup = offsetData[textureIndex]
         const data = lookup[offset]

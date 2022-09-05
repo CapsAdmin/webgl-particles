@@ -7,18 +7,20 @@ import { createProgramInfo, glsl, twgl } from "./other/WebGL";
 
 
 export const defaultConfig = {
-  particleCount: 15000,
-  worldScale: 15,
+  particleCount: 6000,
+  worldScale: 8,
   buildParticles:
-    `p.position = [
-  Math.sin((i / max) * Math.PI * 2) / 2, 
-  Math.cos((i / max) * Math.PI * 2) / 2
+    `
+p.position = [
+  Math.random()*2-1, 
+  Math.random()*2-1, 
 ]
 p.velocity = [0, 0]
-p.gravity = 0.001
-p.size = 0.1
-p.friction = 0.99
-p.color = chroma.hsv((i / max) * 360, 0.9, 1).gl()`,
+p.gravity = -0.00001
+p.size = 0.05 + Math.random()*0.07
+p.friction = 0.9
+p.color = chroma.hsv((i / max) * 360, 0.9, 1).gl()
+`,
   onParticleState: undefined as undefined | ((i: number, state: Float32Array[]) => void),
   simulationCode:
     glsl`
@@ -39,6 +41,31 @@ float particleDistance(vec2 dir, float size) {
   return min(-len, 0.0);
 }
 
+vec3 rgb2hsv(vec3 c)
+{
+    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+
+    float d = q.x - min(q.w, q.y);
+    float e = 1.0e-10;
+    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+vec3 hsv2rgb(vec3 c)
+{
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec2 rotate(vec2 v, float a) {
+  float s = sin(a);
+  float c = cos(a);
+  mat2 m = mat2(c, s, -s, c);
+  return m * v;
+}
+
 void update(int index) {
 
   vec2 pos = getPosition();
@@ -47,22 +74,50 @@ void update(int index) {
   float gravity = getGravity();
   float size = getSize();
   float friction = getFriction();
-  
+  vec3 hsv = rgb2hsv(color.rgb);
+
   for (int i = 0; i < particleCount; i++) {
       if (i == index) continue;
   
       vec2 otherPos = getPosition(i);
+      vec2 otherVel = getVelocity(i);
       vec4 otherColor = getColor(i);
-      vec2 direction = pos - otherPos;
       
-      float attraction = particleDistance(direction, size);
-      float colorDistance = cos(length(color.rgb + otherColor.rgb + attraction)*0.05)*0.5;
-      attraction *= colorDistance;
-      vel += direction * attraction * gravity;
+      vec2 direction = pos-otherPos;
+      float len = length(direction);
+
+      if (len <= 0.0) continue;
+        vec3 otherHSV = rgb2hsv(otherColor.rgb);
+
+      if (len < size) {
+        // collision
+
+        vec2 normal = normalize(direction);
+        vec2 velDiff = otherVel - vel;
+        vel += normal * max(dot(normal, velDiff) * 1.0, 0.0);
+
+        // transfer color for some reason
+        hsv.x = hsv.x + otherHSV.x/len/100000.0;
+        color.rgb = hsv2rgb(hsv);
+      } else if (len < size * 1.5) {
+        // keep some distance
+          
+        vel -= direction * gravity / ((len*len + 0.000001) * len);
+
+      } else {
+        // attraction
+
+        // influence direction with color by rotating it
+        float hueDiff = otherHSV.x-hsv.x;
+        direction = rotate(direction, hueDiff);
+        direction = direction+ (direction*hueDiff*-5.0);
+
+        vel += direction * gravity / ((len*len + 0.000001) * len);
+      }
   }
-  
-  pos += vel;
   vel *= friction;
+  pos += vel;
+  
   
   if (pos.x > worldScale) {
     pos.x = -worldScale;

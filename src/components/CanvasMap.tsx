@@ -21,11 +21,11 @@ export const CanvasMap = (props: {
   return (
     <div style={{ position: "relative", width: viewSize, height: viewSize }}>
       <TransformWrapper
+        initialPositionX={0}
+        initialPositionY={0}
+        initialScale={viewSize / worldSize}
         minScale={0.05}
         maxScale={5}
-        initialScale={0.1}
-        initialPositionX={-viewSize / 4}
-        initialPositionY={-viewSize / 4}
         limitToBounds={false}
       >
         {(pan) => {
