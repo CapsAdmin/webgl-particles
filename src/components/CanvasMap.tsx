@@ -102,6 +102,7 @@ export const CanvasMap = (props: {
       <Typography
         align="left"
         style={{
+          wordWrap: "break-word",
           position: "absolute",
           top: "50%",
           left: "50%",

@@ -1,6 +1,7 @@
 import Editor from "@monaco-editor/react";
 import {
   Box,
+  Button,
   Card,
   Container,
   createTheme,
@@ -25,7 +26,12 @@ import { CodeEditor } from "./components/CodeEditor";
 import { ExponentialSlider } from "./components/ExponentialSlider";
 import { ParticleStateTable } from "./components/ParticleStateTable";
 import { createParticleSimulationRenderer } from "./Renderer";
-import { createParticleSimulation, defaultConfig } from "./Simulation";
+import {
+  createParticleSimulation,
+  defaultConfig,
+  SimulationConfig,
+} from "./Simulation";
+
 const darkTheme = createTheme({
   palette: {
     mode: "dark",
@@ -36,10 +42,23 @@ const darkTheme = createTheme({
   },
 });
 
+let initialConfig = defaultConfig;
+if (localStorage.getItem("config")) {
+  try {
+    const test = JSON.parse(localStorage.getItem("config"));
+    console.log(test);
+    if (test) {
+      initialConfig = test;
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvas2Ref = useRef<HTMLCanvasElement>(null);
-  const [config, setConfig] = useState(defaultConfig);
+  const [config, setConfig] = useState(initialConfig);
   const [error, setError] = useState("");
   const [readParticleState, setReadParticleState] = useState(false);
   const [particleState, setParticleState] = useState<
@@ -71,13 +90,22 @@ function App() {
       );
       setError("");
       return destroy;
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      if (err instanceof Error) {
+      if (typeof err == "string") {
+        setError(err);
+      } else if (err.message) {
         setError(err.message);
       }
     }
   }, [config]);
+
+  const updateConfig = (newConfig: Partial<SimulationConfig>) => {
+    const temp = { ...config, ...newConfig };
+    setConfig(temp);
+
+    localStorage.setItem("config", JSON.stringify(temp));
+  };
 
   return (
     <ThemeProvider theme={darkTheme}>
@@ -104,8 +132,7 @@ function App() {
                     valueLabelDisplay="auto"
                     value={config.worldScale}
                     onChange={(e, num) => {
-                      setConfig({
-                        ...config,
+                      updateConfig({
                         worldScale: Math.round(num as number),
                       });
                     }}
@@ -134,7 +161,7 @@ function App() {
                   ]}
                   value={config.particleCount}
                   onChange={(num) => {
-                    setConfig({ ...config, particleCount: Math.round(num) });
+                    updateConfig({ particleCount: Math.round(num) });
                   }}
                 />
               </Box>
@@ -146,7 +173,7 @@ function App() {
                   language="javascript"
                   code={config.buildParticles}
                   onChange={(code) => {
-                    setConfig({ ...config, buildParticles: code });
+                    updateConfig({ buildParticles: code });
                   }}
                 />
               </Card>
@@ -158,7 +185,7 @@ function App() {
                   language="glsl"
                   code={config.distanceFunction}
                   onChange={(code) => {
-                    setConfig({ ...config, distanceFunction: code });
+                    updateConfig({ distanceFunction: code });
                   }}
                 />
                 <canvas
@@ -182,16 +209,14 @@ function App() {
                 onChange={(e, checked) => {
                   setReadParticleState(checked);
                   if (checked) {
-                    setConfig({
-                      ...config,
+                    updateConfig({
                       onParticleState: (i, state) => {
                         (particleState as any)[i] = state;
                         setParticleState([...particleState]);
                       },
                     });
                   } else {
-                    setConfig({
-                      ...config,
+                    updateConfig({
                       onParticleState: undefined,
                     });
                   }
@@ -203,6 +228,15 @@ function App() {
 
             <ParticleStateTable particleState={particleState} />
           </Card>
+
+          <Button
+            onClick={() => {
+              setConfig({ ...defaultConfig });
+            }}
+            variant="contained"
+          >
+            reset
+          </Button>
         </Stack>
       </Container>
     </ThemeProvider>

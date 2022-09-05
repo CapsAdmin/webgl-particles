@@ -101,7 +101,7 @@ return fetchFromXY(propertyTexture);
 ${config.distanceFunction}
 
 
-vec4 updateTransform() {
+vec4 updateTransform(int index) {
   vec2 pos = getTransform().xy;
   vec2 vel = getTransform().zw;
   vec3 color = getColor().rgb;
@@ -114,8 +114,6 @@ vec4 updateTransform() {
   float heat = 0.0001;
 
   const bool wrapAround = true;
-
- 
 
   for (int i = 0; i < particleCount; i++) {
       vec2 otherPos = getTransform(i).xy;
@@ -131,15 +129,8 @@ vec4 updateTransform() {
       vel += direction * attraction * gravity;
   }
 
-
-  //vx += (Math.random() * 2 - 1) * heat;
-  //vy += (Math.random() * 2 - 1) * heat;
-
   pos += vel;
-
-
   vel *= friction;
-
 
   if (mouse.z != 0.0) {
     vec2 direction = pos - mouse.xy;
@@ -187,6 +178,113 @@ float bounds = worldScale;
   return vec4(pos, vel);
 }
 
+
+vec4 updateTransform2(int index) {
+  vec2 pos = getTransform().xy;
+  vec2 vel = getTransform().zw;
+  vec3 color = getColor().rgb;
+  vec4 props = getProperties();
+  
+  float gravity = props.x;
+  float size = props.y;
+  float friction = props.z;
+  float mass = 16.0 * size;
+  
+  const bool wrapAround = true;
+
+  vec2 force = vec2(0,0);
+  
+  for (int i = 0; i < particleCount; i++) {
+    if (i == index) {
+      continue;
+    }
+    vec2 otherPos = getTransform(i).xy;
+    vec2 otherVel = getTransform(i).zw;
+    vec4 otherProps = getProperties(i);
+    float otherSize = otherProps.y;
+    vec3 otherColor = getColor(i).rgb;
+    float otherMass = 16.0 * otherSize;
+
+
+    vec2 d = otherPos - pos;
+    float len = length(d);
+    if (len == 0.0) {
+      continue;
+    }
+
+    float colorDistance = cos(dot(color.rgb - otherColor.gbr, otherColor.brg - color.bgr)*4.0)*-5.0;
+
+    float norm = sqrt(0.01 + len );
+    float mag = (gravity) / (norm * norm * norm);
+
+      force += (d * (mag * mass));
+
+      if (len < otherSize/2.0) {
+        vel = reflect(vel, normalize(d));
+        force = vec2(0,0);
+
+        if (len < otherSize/4.0) {
+          pos = otherPos + normalize(d) * otherSize/2.0;
+        }
+      }
+
+
+    vel += vel*colorDistance*0.0001;
+  
+  }
+  
+  
+  vel += force*0.01;
+  vel *= friction;
+  pos += vel;
+
+
+  if (mouse.z != 0.0) {
+    vec2 direction = pos - mouse.xy;
+    float distance = length(direction);
+    if (distance > 0.0) {
+      direction /= distance;
+    }
+
+    vel += direction * distance * -0.001;
+  } 
+
+  float bounds = worldScale;
+
+  // wall bounce
+  if (wrapAround) {
+      if (pos.x > bounds) {
+      pos.x = -bounds;
+      } else if (pos.x < -bounds) {
+      pos.x = bounds;
+      }
+
+      if (pos.y >= bounds) {
+      pos.y = -bounds;
+      } else if (pos.y < -bounds) {
+      pos.y = bounds;
+      }
+  } else {
+      if (pos.x > bounds) {
+      pos.x = bounds;
+      vel.x *= -bounds;
+      } else if (pos.x < -bounds) {
+      pos.x = -bounds;
+      vel.x *= -bounds;
+      }
+
+      if (pos.y > bounds) {
+      pos.y = bounds;
+      vel.y *= -bounds;
+      } else if (pos.y < -bounds) {
+      pos.y = -bounds;
+      vel.y *= -bounds;
+      }
+  }
+
+  return vec4(pos, vel);
+}
+
 void main() {
   int x = int(gl_FragCoord.y);
   int y = int(gl_FragCoord.x);
@@ -196,7 +294,7 @@ void main() {
       discard;
   }
 
-  transformOut = updateTransform();
+  transformOut = updateTransform(indexParticle);
   colorOut = getColor();
   propertyOut = getProperties();
 }
