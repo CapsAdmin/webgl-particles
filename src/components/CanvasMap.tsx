@@ -1,4 +1,5 @@
-import { Typography } from "@mui/material";
+import { Add, GpsFixed, Remove } from "@mui/icons-material";
+import { ButtonGroup, IconButton, Stack, Typography } from "@mui/material";
 import { RefObject, useEffect } from "react";
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 
@@ -20,7 +21,7 @@ export const CanvasMap = (props: {
   return (
     <div style={{ position: "relative", width: viewSize, height: viewSize }}>
       <TransformWrapper
-        minScale={0.1}
+        minScale={0.05}
         maxScale={5}
         initialScale={0.1}
         initialPositionX={-viewSize / 4}
@@ -57,11 +58,35 @@ export const CanvasMap = (props: {
           return (
             <>
               <div
-                style={{ position: "absolute", top: 0, left: 0, zIndex: 100 }}
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  right: 0,
+                  zIndex: 100,
+                }}
               >
-                <button onClick={() => pan.zoomIn()}>+</button>
-                <button onClick={() => pan.zoomOut()}>-</button>
-                <button onClick={() => pan.resetTransform()}>x</button>
+                <Stack direction={"column"}>
+                  <IconButton
+                    size="small"
+                    onClick={() => pan.resetTransform(1000)}
+                  >
+                    <GpsFixed />
+                  </IconButton>
+                  <ButtonGroup orientation="vertical" variant="contained">
+                    <IconButton
+                      size="small"
+                      onClick={() => pan.zoomIn(undefined, 500)}
+                    >
+                      <Add />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      onClick={() => pan.zoomOut(undefined, 500)}
+                    >
+                      <Remove />
+                    </IconButton>
+                  </ButtonGroup>
+                </Stack>
               </div>
               <TransformComponent
                 wrapperStyle={{

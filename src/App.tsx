@@ -9,6 +9,7 @@ import {
   Paper,
   Slider,
   Switch,
+  Tab,
   Table,
   TableBody,
   TableCell,
@@ -26,15 +27,20 @@ import { CodeEditor } from "./components/CodeEditor";
 import { ExponentialSlider } from "./components/ExponentialSlider";
 import { ParticleStateTable } from "./components/ParticleStateTable";
 import { createParticleSimulationRenderer } from "./Renderer";
+import TabContext from "@mui/lab/TabContext";
 import {
   createParticleSimulation,
   defaultConfig,
   SimulationConfig,
 } from "./Simulation";
+import { TabList, TabPanel } from "@mui/lab";
 
 const darkTheme = createTheme({
   palette: {
     mode: "dark",
+    primary: {
+      main: "#505050FF",
+    },
   },
   // fixed with fonts
   typography: {
@@ -58,25 +64,32 @@ if (localStorage.getItem("config")) {
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const canvas2Ref = useRef<HTMLCanvasElement>(null);
   const [config, setConfig] = useState(initialConfig);
   const [error, setError] = useState("");
-  const [readParticleState, setReadParticleState] = useState(false);
   const [particleState, setParticleState] = useState<number[][][]>([]);
 
   const viewRef = useRef<MapView>(null);
+  const updateConfig = (newConfig: Partial<SimulationConfig>) => {
+    const temp = { ...config, ...newConfig };
+    setConfig(temp);
+
+    localStorage.setItem("config", JSON.stringify(temp));
+  };
+
+  const [tab, setTab] = useState("1");
 
   useEffect(() => {
     const gl = canvasRef.current?.getContext("webgl2", {
       preserveDrawingBuffer: true,
     });
-    const gl2 = canvas2Ref.current?.getContext("webgl2");
-    if (!gl || !gl2) return;
+    if (!gl) return;
 
     try {
       let particleSimulation = createParticleSimulation(gl, config);
 
-      particleSimulation.renderDistanceFunction(gl2);
+      if (config.particleCount > 30) {
+        config.onParticleState = undefined;
+      }
 
       let destroy = createParticleSimulationRenderer(
         gl,
@@ -99,52 +112,52 @@ function App() {
     }
   }, [config]);
 
-  const updateConfig = (newConfig: Partial<SimulationConfig>) => {
-    const temp = { ...config, ...newConfig };
-    setConfig(temp);
-
-    localStorage.setItem("config", JSON.stringify(temp));
-  };
-
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
 
-      <Container>
-        <Typography variant="h1">Particle simulator</Typography>
+      <Container maxWidth="xl" sx={{ marginTop: 4 }}>
         <Stack spacing={3} alignSelf="center" justifySelf={"center"} flex={1}>
-          <Stack spacing={3} direction="row">
-            <Card>
-              <Stack padding={1} flex={1}>
-                <CanvasMap
-                  viewSize={512}
-                  worldScale={config.worldScale}
-                  viewRef={viewRef}
-                  canvasRef={canvasRef}
-                  error={error}
-                />
-                <Box>
-                  <Typography variant="h5">world scale</Typography>
-                  <Slider
-                    min={1}
-                    max={50}
-                    valueLabelDisplay="auto"
-                    value={config.worldScale}
-                    onChange={(e, num) => {
-                      updateConfig({
-                        worldScale: Math.round(num as number),
-                      });
-                    }}
-                  />
-                </Box>
-              </Stack>
-            </Card>
-
+          <Typography align="center" variant="h2">
+            particle playground
+          </Typography>
+          <Stack
+            spacing={3}
+            direction={{
+              md: "column",
+              lg: "row",
+            }}
+          >
             <Stack padding={3} spacing={2} flex={1}>
-              <Typography variant="h3">behavior</Typography>
+              <Card variant="outlined">
+                <Stack alignItems={"center"}>
+                  <CanvasMap
+                    viewSize={700}
+                    worldScale={config.worldScale}
+                    viewRef={viewRef}
+                    canvasRef={canvasRef}
+                    error={error}
+                  />
+                </Stack>
+              </Card>
 
               <Box>
-                <Typography variant="h5">count</Typography>
+                <Typography variant="body1">world scale</Typography>
+                <Slider
+                  min={1}
+                  max={50}
+                  valueLabelDisplay="auto"
+                  value={config.worldScale}
+                  onChange={(e, num) => {
+                    updateConfig({
+                      worldScale: Math.round(num as number),
+                    });
+                  }}
+                />
+              </Box>
+
+              <Box>
+                <Typography variant="body1">count</Typography>
                 <ExponentialSlider
                   steps={[
                     { value: 1, label: "1" },
@@ -165,77 +178,84 @@ function App() {
                 />
               </Box>
 
+              <Button
+                onClick={() => {
+                  updateConfig({ ...defaultConfig });
+                }}
+                variant="contained"
+              >
+                reset
+              </Button>
+            </Stack>
+
+            <Stack padding={3} spacing={2} flex={1}>
               <Card variant="outlined">
-                <Typography variant="h5">properties</Typography>
+                <TabContext value={tab}>
+                  <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+                    <TabList
+                      onChange={(e, v) => {
+                        setTab(v);
+                      }}
+                    >
+                      <Tab label="init" value="1" />
+                      <Tab label="simulation" value="2" />
+                    </TabList>
+                  </Box>
 
-                <CodeEditor
-                  language="javascript"
-                  code={config.buildParticles}
-                  onChange={(code) => {
-                    updateConfig({ buildParticles: code });
-                  }}
-                />
-              </Card>
+                  <TabPanel value="1">
+                    <div style={{ margin: -25 }}>
+                      <CodeEditor
+                        language="javascript"
+                        code={config.buildParticles}
+                        onChange={(code) => {
+                          updateConfig({ buildParticles: code });
+                        }}
+                      />
+                    </div>
+                  </TabPanel>
 
-              <Card variant="outlined" style={{ position: "relative" }}>
-                <Typography variant="h5">attraction</Typography>
-
-                <CodeEditor
-                  language="glsl"
-                  code={config.distanceFunction}
-                  onChange={(code) => {
-                    updateConfig({ distanceFunction: code });
-                  }}
-                />
-                <canvas
-                  ref={canvas2Ref}
-                  style={{
-                    pointerEvents: "none",
-                    position: "absolute",
-                    bottom: 0,
-                    right: 0,
-                    width: 128,
-                    height: 128,
-                  }}
-                />
+                  <TabPanel value="2">
+                    <div style={{ margin: -25 }}>
+                      <CodeEditor
+                        language="glsl"
+                        code={config.simulationCode}
+                        onChange={(code) => {
+                          updateConfig({ simulationCode: code });
+                        }}
+                      />
+                    </div>
+                  </TabPanel>
+                </TabContext>
               </Card>
             </Stack>
           </Stack>
 
-          <Card>
-            <Stack direction={"row"} alignItems="center">
-              <Switch
-                onChange={(e, checked) => {
-                  setReadParticleState(checked);
-                  if (checked) {
-                    updateConfig({
-                      onParticleState: (i, state) => {
-                        (particleState as any)[i] = state;
-                        setParticleState([...particleState]);
-                      },
-                    });
-                  } else {
-                    updateConfig({
-                      onParticleState: undefined,
-                    });
-                  }
-                }}
-              />
+          {config.particleCount < 30 ? (
+            <Card>
+              <Stack direction={"row"} alignItems="center">
+                <Switch
+                  onChange={(e, checked) => {
+                    if (checked) {
+                      updateConfig({
+                        onParticleState: (i, state) => {
+                          (particleState as any)[i] = state;
+                          setParticleState([...particleState]);
+                        },
+                      });
+                    } else {
+                      updateConfig({
+                        onParticleState: undefined,
+                      });
+                    }
+                  }}
+                />
 
-              <Typography>read paritcle state</Typography>
-            </Stack>
+                <Typography>read paritcle state</Typography>
+              </Stack>
 
-            <ParticleStateTable particleState={particleState} />
-          </Card>
-
-          <Button
-            onClick={() => {
-              setConfig({ ...defaultConfig });
-            }}
-            variant="contained"
-          >
-            reset
-          </Button>
+              <ParticleStateTable particleState={particleState} />
+            </Card>
+          ) : null}
         </Stack>
       </Container>
     </ThemeProvider>

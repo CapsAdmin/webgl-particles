@@ -12,16 +12,16 @@ export const CodeEditor = (props: {
           enabled: false,
         },
         glyphMargin: false,
-        folding: false,
-        lineNumbers: "off",
+        folding: true,
+        lineNumbers: "on",
         lineDecorationsWidth: 0,
-        lineNumbersMinChars: 0,
+        lineNumbersMinChars: 3,
       }}
       onMount={(editor, monaco) => {
         registerGLSL(monaco);
       }}
       theme="vs-dark"
-      height={256}
+      height={1024}
       language={props.language}
       value={props.code}
       onChange={(str) => {
