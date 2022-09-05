@@ -1,7 +1,12 @@
 import { Add, GpsFixed, Remove } from "@mui/icons-material";
 import { ButtonGroup, IconButton, Stack, Typography } from "@mui/material";
-import { RefObject, useEffect } from "react";
-import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
+import { RefObject, useEffect, useRef, useState } from "react";
+import {
+  ReactZoomPanPinchRef,
+  TransformComponent,
+  TransformWrapper,
+} from "react-zoom-pan-pinch";
+import ReactResizeDetector from "react-resize-detector";
 
 export type MapView = { get: () => readonly [number, number, number] };
 
@@ -12,67 +17,79 @@ export const CanvasMap = (props: {
   viewSize: number;
   worldScale: number;
 }) => {
-  const viewSize = props.viewSize;
-  const worldSize = viewSize * props.worldScale;
+  const [viewWidth, setViewWidth] = useState(window.innerWidth);
+  const [viewHeight, setViewHeight] = useState(window.innerHeight);
+  const worldWidth = viewWidth * props.worldScale;
+  const worldHeight = viewHeight * props.worldScale;
+  const panRef = useRef<ReactZoomPanPinchRef | null>(null);
 
-  useEffect(() => {
-    (props.viewRef.current as any) = null;
-  }, [worldSize]);
+  const renderSize = Math.max(viewWidth, viewHeight);
+  const renderWidth = Math.min(renderSize, 1024);
+  const renderHeight = Math.min(renderSize, 1024);
+
   return (
-    <div style={{ position: "relative", width: viewSize, height: viewSize }}>
-      <TransformWrapper
-        initialPositionX={0}
-        initialPositionY={0}
-        initialScale={viewSize / worldSize}
-        minScale={0.05}
-        maxScale={5}
-        limitToBounds={false}
-      >
-        {(pan) => {
-          if (!props.viewRef.current) {
+    <ReactResizeDetector
+      handleWidth
+      handleHeight
+      onResize={(width, height) => {
+        setViewWidth(width || 700);
+        setViewHeight(height || 700);
+        panRef.current?.centerView(undefined, 0);
+      }}
+    >
+      <div style={{ position: "relative", flex: 1, height: "100vh" }}>
+        <TransformWrapper
+          initialPositionX={0}
+          initialPositionY={0}
+          initialScale={viewWidth / worldWidth}
+          minScale={0.05}
+          maxScale={5}
+          limitToBounds={false}
+        >
+          {(pan) => {
+            panRef.current = pan;
+            // yikes
             (props.viewRef.current as any) = {
               get: () => {
                 const scale = pan.state.scale;
 
-                let x = -(pan.state.positionX - viewSize / 2) / worldSize;
-                let y = -(pan.state.positionY - viewSize / 2) / worldSize;
+                let x = -(pan.state.positionX - viewWidth / 2) / worldWidth;
+                let y = -(pan.state.positionY - viewHeight / 2) / worldHeight;
                 x = x * (1 / scale);
                 y = y * (1 / scale);
 
                 x = x * 2 - 1;
                 y = y * 2 - 1;
 
-                x = x * (worldSize / viewSize);
-                y = y * (worldSize / viewSize);
+                x = x * (worldWidth / viewWidth);
+                y = y * (worldHeight / viewHeight);
 
                 x = x * scale;
                 y = y * scale;
 
                 x = -x;
 
-                return [x, y, scale] as const;
+                return [x, y, scale, viewWidth / viewHeight] as const;
               },
             };
-          }
 
-          return (
-            <>
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  right: 0,
-                  zIndex: 100,
-                }}
-              >
-                <Stack direction={"column"}>
-                  <IconButton
-                    size="small"
-                    onClick={() => pan.resetTransform(1000)}
-                  >
-                    <GpsFixed />
-                  </IconButton>
-                  <ButtonGroup orientation="vertical" variant="contained">
+            return (
+              <>
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: 25,
+                    right: 15,
+                    zIndex: 100,
+                  }}
+                >
+                  <Stack direction={"column"}>
+                    <IconButton
+                      size="small"
+                      onClick={() => pan.resetTransform(1000)}
+                    >
+                      <GpsFixed />
+                    </IconButton>
                     <IconButton
                       size="small"
                       onClick={() => pan.zoomIn(undefined, 500)}
@@ -85,60 +102,63 @@ export const CanvasMap = (props: {
                     >
                       <Remove />
                     </IconButton>
-                  </ButtonGroup>
-                </Stack>
-              </div>
-              <TransformComponent
-                wrapperStyle={{
-                  width: viewSize,
-                  height: viewSize,
-                }}
-                contentStyle={{
-                  width: worldSize,
-                  height: worldSize,
-                }}
-              >
-                <div
-                  style={{
-                    width: worldSize,
-                    height: worldSize,
-                    background:
-                      "radial-gradient(circle, rgba(10,10,10,1) 0%, rgba(0,0,0,1) 50%) ",
+                  </Stack>
+                </div>
+                <TransformComponent
+                  wrapperStyle={{
+                    width: viewWidth,
+                    height: viewHeight,
                   }}
-                ></div>
-              </TransformComponent>
-              <canvas
-                width={viewSize}
-                height={viewSize}
-                ref={props.canvasRef}
-                style={{
-                  pointerEvents: "none",
-                  position: "absolute",
-                  zIndex: 10,
-                  top: 0,
-                  left: 0,
-                }}
-              />
-            </>
-          );
-        }}
-      </TransformWrapper>
+                  contentStyle={{
+                    width: worldWidth,
+                    height: worldHeight,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: worldWidth,
+                      height: worldHeight,
+                      background:
+                        "radial-gradient(circle, rgba(10,10,10,1) 0%, rgba(0,0,0,1) 50%) ",
+                    }}
+                  ></div>
+                </TransformComponent>
+                <canvas
+                  width={renderWidth}
+                  height={renderHeight}
+                  ref={props.canvasRef}
+                  style={{
+                    objectFit: "contain",
+                    pointerEvents: "none",
+                    position: "absolute",
+                    width: viewWidth,
+                    height: viewHeight,
+                    zIndex: 10,
+                    top: 0,
+                    left: 0,
+                  }}
+                />
+              </>
+            );
+          }}
+        </TransformWrapper>
 
-      <Typography
-        align="left"
-        style={{
-          wordWrap: "break-word",
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          backgroundColor: "black",
-          zIndex: 100,
-        }}
-        color="error"
-      >
-        {props.error}
-      </Typography>
-    </div>
+        <Typography
+          align="left"
+          style={{
+            wordWrap: "break-word",
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            backgroundColor: "black",
+            zIndex: 100,
+          }}
+          color="error"
+        >
+          {props.error}
+        </Typography>
+      </div>
+    </ReactResizeDetector>
   );
 };

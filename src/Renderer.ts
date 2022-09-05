@@ -6,16 +6,16 @@ import { createProgramInfo, glsl, twgl } from "./other/WebGL";
 export const createParticleSimulationRenderer = (
     gl: WebGL2RenderingContext,
     particleSimulation: ReturnType<typeof createParticleSimulation>,
-    getView?: () => readonly [number, number, number]
+    getView?: () => readonly [number, number, number, number]
 ) => {
     if (!getView) {
-        getView = (() => [0, 0, 1]);
+        getView = (() => [0, 0, 1, 1]);
     }
     const VERTEX = glsl`
     in vec2 indexPos;
     in vec2 pos;
     
-    uniform vec3 view;
+    uniform vec4 view;
     uniform sampler2D textureTransform;
     uniform sampler2D textureColor;
     uniform sampler2D textureProperties;
@@ -39,7 +39,7 @@ export const createParticleSimulationRenderer = (
     
     uniform vec2 screenSize;
     
-    uniform vec3 view;
+    uniform vec4 view;
 
     in vec4 outColor;
     in vec4 outProperties;

@@ -8,7 +8,7 @@ import { createProgramInfo, glsl, twgl } from "./other/WebGL";
 
 export const defaultConfig = {
   particleCount: 6000,
-  worldScale: 8,
+  worldScale: 15,
   buildParticles:
     `
 p.position = [
@@ -24,23 +24,6 @@ p.color = chroma.hsv((i / max) * 360, 0.9, 1).gl()
   onParticleState: undefined as undefined | ((i: number, state: Float32Array[]) => void),
   simulationCode:
     glsl`
-float particleDistance(vec2 dir, float size) {
-  float dist = length(dir);
-  if (dist == 0.0) {
-    return 0.0;
-  }
-  
-  float len = -(dist / sqrt(2.0)) + 1.0;
-
-  // repulsion
-  if (dist < size) {
-    return len;
-  }
-
-  // attraction
-  return min(-len, 0.0);
-}
-
 vec3 rgb2hsv(vec3 c)
 {
     vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
