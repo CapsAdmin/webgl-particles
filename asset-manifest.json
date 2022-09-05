@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.js": "/static/js/main.4346db86.js",
+    "ts.worker.js": "/ts.worker.js",
+    "css.worker.js": "/css.worker.js",
+    "html.worker.js": "/html.worker.js",
+    "json.worker.js": "/json.worker.js",
+    "editor.worker.js": "/editor.worker.js",
+    "index.html": "/index.html",
+    "main.4346db86.js.map": "/static/js/main.4346db86.js.map"
+  },
+  "entrypoints": [
+    "static/js/main.4346db86.js"
+  ]
+}
