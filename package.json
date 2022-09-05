@@ -1,6 +1,7 @@
 {
   "name": "gpujssimulations",
   "version": "0.1.0",
+  "homepage": "https://capsadmin.github.io",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.10.4",
@@ -18,6 +19,7 @@
     "@types/react": "^18.0.17",
     "@types/react-dom": "^18.0.6",
     "chroma-js": "^2.4.2",
+    "gh-pages": "^4.0.0",
     "gpu.js": "^2.15.2",
     "monaco-editor": "^0.34.0",
     "monaco-editor-webpack-plugin": "^7.0.1",
@@ -33,7 +35,8 @@
   "scripts": {
     "start": "react-app-rewired start",
     "build": "react-app-rewired build",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "deploy": "gh-pages -d build"
   },
   "eslintConfig": {
     "extends": [
