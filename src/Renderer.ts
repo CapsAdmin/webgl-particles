@@ -1,7 +1,7 @@
 import { FramebufferInfo } from "twgl.js";
 import { mouseEvents, renderLoop } from "./other/Events";
 import { createParticleSimulation } from "./Simulation";
-import { glsl, twgl } from "./other/WebGL";
+import { createProgramInfo, glsl, twgl } from "./other/WebGL";
 
 export const createParticleSimulationRenderer = (
     gl: WebGL2RenderingContext,
@@ -60,17 +60,13 @@ export const createParticleSimulationRenderer = (
 
     twgl.addExtensionsToContext(gl);
 
-    const programInfo = twgl.createProgramInfo(gl, [VERTEX, FRAGMENT], {
-        errorCallback: (err) => {
-            throw err;
-        },
-    });
+    const programInfo = createProgramInfo(gl, VERTEX, FRAGMENT);
 
-    const particleIndices = new Float32Array(particleSimulation.count * 12);
+    const particleIndices = new Float32Array(particleSimulation.compute.count * 12);
 
-    for (let x = 0; x < particleSimulation.textureSize; x++) {
-        for (let y = 0; y < particleSimulation.textureSize; y++) {
-            const idx = (x * particleSimulation.textureSize + y) * 12;
+    for (let x = 0; x < particleSimulation.compute.textureSize; x++) {
+        for (let y = 0; y < particleSimulation.compute.textureSize; y++) {
+            const idx = (x * particleSimulation.compute.textureSize + y) * 12;
             particleIndices[idx + 0] = x;
             particleIndices[idx + 1] = y;
             particleIndices[idx + 2] = x;
@@ -93,9 +89,9 @@ export const createParticleSimulationRenderer = (
         },
     });
 
-    const particleQuads = new Float32Array(particleSimulation.count * 12);
+    const particleQuads = new Float32Array(particleSimulation.compute.count * 12);
 
-    for (let i = 0; i < particleSimulation.count; i++) {
+    for (let i = 0; i < particleSimulation.compute.count; i++) {
         const idx = i * 12;
 
         particleQuads[idx + 0] = -1.0;
@@ -130,9 +126,9 @@ export const createParticleSimulationRenderer = (
 
         twgl.setUniforms(programInfo, {
             view: getView!(),
-            textureTransform: particleSimulation.dataTextures[0],
-            textureColor: particleSimulation.dataTextures[1],
-            textureProperties: particleSimulation.dataTextures[2],
+            textureTransform: particleSimulation.compute.dataTextures[0],
+            textureColor: particleSimulation.compute.dataTextures[1],
+            textureProperties: particleSimulation.compute.dataTextures[2],
             screenSize: [gl.drawingBufferWidth, gl.drawingBufferHeight],
         });
 

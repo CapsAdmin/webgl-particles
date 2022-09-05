@@ -62,9 +62,7 @@ function App() {
   const [config, setConfig] = useState(initialConfig);
   const [error, setError] = useState("");
   const [readParticleState, setReadParticleState] = useState(false);
-  const [particleState, setParticleState] = useState<
-    Array<[Float32Array, Float32Array, Float32Array]>
-  >([]);
+  const [particleState, setParticleState] = useState<number[][][]>([]);
 
   const viewRef = useRef<MapView>(null);
 

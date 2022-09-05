@@ -30,9 +30,7 @@ const formatProperty = (value: number) => {
   return value.toFixed(3);
 };
 
-export const ParticleStateTable = (props: {
-  particleState: [Float32Array, Float32Array, Float32Array][];
-}) => {
+export const ParticleStateTable = (props: { particleState: number[][][] }) => {
   return (
     <TableContainer component={Paper}>
       <Table sx={{ minWidth: 650 }} size="small" aria-label="a dense table">
