@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.js": "/webgl-particles/static/js/main.4346db86.js",
+    "main.js": "/webgl-particles/static/js/main.ec888e4c.js",
     "ts.worker.js": "/webgl-particles/ts.worker.js",
     "css.worker.js": "/webgl-particles/css.worker.js",
     "html.worker.js": "/webgl-particles/html.worker.js",
     "json.worker.js": "/webgl-particles/json.worker.js",
     "editor.worker.js": "/webgl-particles/editor.worker.js",
     "index.html": "/webgl-particles/index.html",
-    "main.4346db86.js.map": "/webgl-particles/static/js/main.4346db86.js.map"
+    "main.ec888e4c.js.map": "/webgl-particles/static/js/main.ec888e4c.js.map"
   },
   "entrypoints": [
-    "static/js/main.4346db86.js"
+    "static/js/main.ec888e4c.js"
   ]
 }
