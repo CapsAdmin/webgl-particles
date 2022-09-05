@@ -45,7 +45,9 @@ const darkTheme = createTheme({
 let initialConfig = defaultConfig;
 if (localStorage.getItem("config")) {
   try {
-    const test = JSON.parse(localStorage.getItem("config"));
+    const str = localStorage.getItem("config");
+    if (!str) throw new Error("no config");
+    const test = JSON.parse(str);
     if (test) {
       initialConfig = test;
     }

@@ -15,7 +15,7 @@ export const CanvasMap = (props: {
   const worldSize = viewSize * props.worldScale;
 
   useEffect(() => {
-    props.viewRef.current = null;
+    (props.viewRef.current as any) = null;
   }, [worldSize]);
   return (
     <div style={{ position: "relative", width: viewSize, height: viewSize }}>
@@ -29,7 +29,7 @@ export const CanvasMap = (props: {
       >
         {(pan) => {
           if (!props.viewRef.current) {
-            props.viewRef.current = {
+            (props.viewRef.current as any) = {
               get: () => {
                 const scale = pan.state.scale;
 
