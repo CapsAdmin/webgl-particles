@@ -1,15 +1,18 @@
 {
   "files": {
-    "main.js": "/webgl-particles/static/js/main.ec888e4c.js",
+    "main.css": "/webgl-particles/static/css/main.d265cd9a.css",
+    "main.js": "/webgl-particles/static/js/main.0b0eed07.js",
     "ts.worker.js": "/webgl-particles/ts.worker.js",
     "css.worker.js": "/webgl-particles/css.worker.js",
     "html.worker.js": "/webgl-particles/html.worker.js",
     "json.worker.js": "/webgl-particles/json.worker.js",
     "editor.worker.js": "/webgl-particles/editor.worker.js",
     "index.html": "/webgl-particles/index.html",
-    "main.ec888e4c.js.map": "/webgl-particles/static/js/main.ec888e4c.js.map"
+    "main.d265cd9a.css.map": "/webgl-particles/static/css/main.d265cd9a.css.map",
+    "main.0b0eed07.js.map": "/webgl-particles/static/js/main.0b0eed07.js.map"
   },
   "entrypoints": [
-    "static/js/main.ec888e4c.js"
+    "static/css/main.d265cd9a.css",
+    "static/js/main.0b0eed07.js"
   ]
 }
