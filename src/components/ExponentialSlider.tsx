@@ -33,7 +33,6 @@ const valueToIndex = (value: number, steps: number[]) => {
       const max = steps[steps.length - 1];
       let a = steps[prevIdnex] / max;
       let b = step / max;
-      console.log(index + 1 + a / b);
       return index + a / b;
     }
   }

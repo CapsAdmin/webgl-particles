@@ -46,7 +46,6 @@ let initialConfig = defaultConfig;
 if (localStorage.getItem("config")) {
   try {
     const test = JSON.parse(localStorage.getItem("config"));
-    console.log(test);
     if (test) {
       initialConfig = test;
     }

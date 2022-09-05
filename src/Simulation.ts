@@ -1,5 +1,5 @@
 import chroma from "chroma-js";
-import { FramebufferInfo } from "twgl.js";
+import { AttachmentOptions, FramebufferInfo } from "twgl.js";
 import { mouseEvents, renderLoop } from "./other/Events";
 import { glsl, twgl } from "./other/WebGL";
 
@@ -40,6 +40,75 @@ p.color = chroma.hsv((i / max) * 360, 0.9, 1).gl()`,
 };
 
 export type SimulationConfig = typeof defaultConfig;
+const FLOAT = 0 as number
+const ParticleStructure = {
+  position: [FLOAT, FLOAT],
+  velocity: [FLOAT, FLOAT],
+  color: [FLOAT, FLOAT, FLOAT, FLOAT],
+  gravity: FLOAT,
+  size: FLOAT,
+  friction: FLOAT,
+} as const
+
+let floatCount = 0;
+let sharedShaderCode = ""
+let writeShaderCode = ""
+
+let particleIndexToOffset: Record<string, Record<string, { name: string, index?: number }>> = {}
+
+for (const [key, val] of Object.entries(ParticleStructure)) {
+  const textureIndex = Math.floor(floatCount / 4)
+  const textureOffset = floatCount % 4
+  let len = (typeof val == "number" ? 1 : val.length)
+
+  let glslIndex = "xyzw"
+  let types = ["float", "vec2", "vec3", "vec4"]
+
+  particleIndexToOffset[textureIndex] = particleIndexToOffset[textureIndex] || {}
+
+  for (let i = textureOffset; i < 4; i++) {
+    particleIndexToOffset[textureIndex][i] = { name: key, index: len == 1 ? undefined : (textureOffset + i - textureOffset) % len }
+  }
+
+  sharedShaderCode +=
+    `
+  ${types[len - 1]} get${key.charAt(0).toUpperCase() + key.slice(1)}(int i) {
+    return fetchFromIndex(dataTexture${textureIndex}, i).${glslIndex.substring(textureOffset, textureOffset + len)};
+  }
+`
+
+  sharedShaderCode +=
+    `
+${types[len - 1]} get${key.charAt(0).toUpperCase() + key.slice(1)}() {
+return fetchFromXY(dataTexture${textureIndex}).${glslIndex.substring(textureOffset, textureOffset + len)};
+}
+`
+
+  writeShaderCode +=
+    `
+  void set${key.charAt(0).toUpperCase() + key.slice(1)}(${types[len - 1]} val) {
+    dataTexture${textureIndex}Out.${glslIndex.substring(textureOffset, textureOffset + len)} = val;
+  }
+  `
+
+  floatCount += len
+}
+
+const textureCount = Math.ceil(floatCount / 4)
+
+let fragmentShaderHeader = ""
+for (let i = 0; i < textureCount; i++) {
+  fragmentShaderHeader += `uniform sampler2D dataTexture${i};
+`
+}
+
+const fragmentShader = sharedShaderCode
+
+let vertexShaderHeader = fragmentShaderHeader
+for (let i = 0; i < textureCount; i++) {
+  vertexShaderHeader += `layout(location=${i}) out vec4 dataTexture${i}Out;
+`
+}
 
 export const createParticleSimulation = (
   gl: WebGL2RenderingContext,
@@ -56,67 +125,37 @@ void main() {
 `;
   const FRAGMENT = glsl`    
 uniform vec3 mouse;
-
-uniform sampler2D transformTexture;
-uniform sampler2D colorTexture;
-uniform sampler2D propertyTexture;
-  
-layout(location=0) out vec4 transformOut;
-layout(location=1) out vec4 colorOut;
-layout(location=2) out vec4 propertyOut;
-
 uniform int particleCount;
 uniform int textureSize;
 uniform float worldScale;
 
 vec4 fetchFromIndex(sampler2D texture, int index) {
-return texelFetch(texture, ivec2(index%textureSize, index/textureSize), 0);
+  return texelFetch(texture, ivec2(index%textureSize, index/textureSize), 0);
 }
-
+  
 vec4 fetchFromXY(sampler2D texture) {
-return texelFetch(texture, ivec2(gl_FragCoord.x, gl_FragCoord.y), 0);
+  return texelFetch(texture, ivec2(gl_FragCoord.x, gl_FragCoord.y), 0);
 }
-
-vec4 getTransform(int index) {
-return fetchFromIndex(transformTexture, index);
-}
-vec4 getColor(int index) {
-return fetchFromIndex(colorTexture, index);
-}
-vec4 getProperties(int index) {
-return fetchFromIndex(propertyTexture, index);
-}
-
-vec4 getTransform() {
-return fetchFromXY(transformTexture);
-}
-vec4 getColor() {
-return fetchFromXY(colorTexture);
-}
-vec4 getProperties() {
-return fetchFromXY(propertyTexture);
-}
-
-
+  
+${vertexShaderHeader}
+${sharedShaderCode}
+${writeShaderCode}
 ${config.distanceFunction}
 
-
-vec4 updateTransform(int index) {
-  vec2 pos = getTransform().xy;
-  vec2 vel = getTransform().zw;
+void update(int index) {
+  vec2 pos = getPosition();
+  vec2 vel = getVelocity();
   vec3 color = getColor().rgb;
-  vec4 props = getProperties();
-  
-  float gravity = props.x;
-  float size = props.y;
-  float friction = props.z;
+  float gravity = getGravity();
+  float size = getSize();
+  float friction = getFriction();
 
   float heat = 0.0001;
 
   const bool wrapAround = true;
 
   for (int i = 0; i < particleCount; i++) {
-      vec2 otherPos = getTransform(i).xy;
+      vec2 otherPos = getPosition(i);
       vec3 otherColor = getColor(i).rgb;
       vec2 direction = pos - otherPos;
       
@@ -175,114 +214,13 @@ float bounds = worldScale;
       }
   }
 
-  return vec4(pos, vel);
-}
-
-
-vec4 updateTransform2(int index) {
-  vec2 pos = getTransform().xy;
-  vec2 vel = getTransform().zw;
-  vec3 color = getColor().rgb;
-  vec4 props = getProperties();
+  setPosition(pos);
+  setVelocity(vel);
   
-  float gravity = props.x;
-  float size = props.y;
-  float friction = props.z;
-  float mass = 16.0 * size;
-  
-  const bool wrapAround = true;
-
-  vec2 force = vec2(0,0);
-  
-  for (int i = 0; i < particleCount; i++) {
-    if (i == index) {
-      continue;
-    }
-    vec2 otherPos = getTransform(i).xy;
-    vec2 otherVel = getTransform(i).zw;
-    vec4 otherProps = getProperties(i);
-    float otherSize = otherProps.y;
-    vec3 otherColor = getColor(i).rgb;
-    float otherMass = 16.0 * otherSize;
-
-
-    vec2 d = otherPos - pos;
-    float len = length(d);
-    if (len == 0.0) {
-      continue;
-    }
-
-    float colorDistance = cos(dot(color.rgb - otherColor.gbr, otherColor.brg - color.bgr)*4.0)*-5.0;
-
-    float norm = sqrt(0.01 + len );
-    float mag = (gravity) / (norm * norm * norm);
-
-      force += (d * (mag * mass));
-
-      if (len < otherSize/2.0) {
-        vel = reflect(vel, normalize(d));
-        force = vec2(0,0);
-
-        if (len < otherSize/4.0) {
-          pos = otherPos + normalize(d) * otherSize/2.0;
-        }
-      }
-
-
-    vel += vel*colorDistance*0.0001;
-  
-  }
-  
-  
-  vel += force*0.01;
-  vel *= friction;
-  pos += vel;
-
-
-  if (mouse.z != 0.0) {
-    vec2 direction = pos - mouse.xy;
-    float distance = length(direction);
-    if (distance > 0.0) {
-      direction /= distance;
-    }
-
-    vel += direction * distance * -0.001;
-  } 
-
-  float bounds = worldScale;
-
-  // wall bounce
-  if (wrapAround) {
-      if (pos.x > bounds) {
-      pos.x = -bounds;
-      } else if (pos.x < -bounds) {
-      pos.x = bounds;
-      }
-
-      if (pos.y >= bounds) {
-      pos.y = -bounds;
-      } else if (pos.y < -bounds) {
-      pos.y = bounds;
-      }
-  } else {
-      if (pos.x > bounds) {
-      pos.x = bounds;
-      vel.x *= -bounds;
-      } else if (pos.x < -bounds) {
-      pos.x = -bounds;
-      vel.x *= -bounds;
-      }
-
-      if (pos.y > bounds) {
-      pos.y = bounds;
-      vel.y *= -bounds;
-      } else if (pos.y < -bounds) {
-      pos.y = -bounds;
-      vel.y *= -bounds;
-      }
-  }
-
-  return vec4(pos, vel);
+  setColor(getColor());
+  setGravity(getGravity());
+  setSize(getSize());
+  setFriction(getFriction());
 }
 
 void main() {
@@ -294,12 +232,9 @@ void main() {
       discard;
   }
 
-  transformOut = updateTransform(indexParticle);
-  colorOut = getColor();
-  propertyOut = getProperties();
+  update(indexParticle);
 }
 `;
-
 
   let textureSize = 2;
   while (textureSize * textureSize < config.particleCount) {
@@ -346,64 +281,45 @@ void main() {
     return out;
   };
 
+  type Particle = typeof ParticleStructure
 
-  type Particle = {
-    position: [number, number],
-    velocity: [number, number],
-    gravity: number,
-    size: number,
-    friction: number,
-    color: [number, number, number, number]
-  }
   const buildParticle = eval("(i, max) => { const p = {}\n " + config.buildParticles + "\n return p }") as (i: number, max: number) => Particle
 
-  const particles: Particle[] = []
+  const particles: Array<Particle> = []
 
   globalThis.chroma = chroma
 
   for (let i = 0; i < config.particleCount; i++) {
     particles.push(buildParticle(i, config.particleCount))
   }
+  const dataTextures = []
+  const getValue = (particleIndex: number, textureIndex: number, offset: number) => {
+    const lookup = particleIndexToOffset[textureIndex]
+    const data = lookup[offset]
+    const key = data.name as keyof typeof particles[number]
+    const val = particles[particleIndex][key]
+    if (typeof data.index === "number") {
+      return (val as any)[data.index]
+    }
+    return val
+  }
 
-  const transformTexture = createDoubleBufferTexture(
-    textureSize,
-    (i) => {
-      if (i < config.particleCount) {
-        return [
-          particles[i].position[0],
-          particles[i].position[1],
-          particles[i].velocity[0],
-          particles[i].velocity[1],
-        ];
-      }
-    },
-    gl
-  );
-
-  const colorTexture = createDoubleBufferTexture(
-    textureSize,
-    (i) => {
-      if (i < config.particleCount) {
-        return particles[i].color;
-      }
-    },
-    gl
-  );
-
-  const propertyTexture = createDoubleBufferTexture(
-    textureSize,
-    (i) => {
-      if (i < config.particleCount) {
-        return [
-          particles[i].gravity,
-          particles[i].size,
-          particles[i].friction,
-          0,
-        ];
-      }
-    },
-    gl
-  );
+  for (let textureIndex = 0; textureIndex < textureCount; textureIndex++) {
+    dataTextures.push(createDoubleBufferTexture(
+      textureSize,
+      (particleIndex) => {
+        if (particleIndex < config.particleCount) {
+          return [
+            getValue(particleIndex, textureIndex, 0),
+            getValue(particleIndex, textureIndex, 1),
+            getValue(particleIndex, textureIndex, 2),
+            getValue(particleIndex, textureIndex, 3),
+          ];
+        }
+      },
+      gl
+    ))
+  }
 
   const programInfo = twgl.createProgramInfo(gl, [VERTEX, FRAGMENT], {
     errorCallback: (err) => {
@@ -420,27 +336,19 @@ void main() {
 
   twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
 
-  let index = gl.COLOR_ATTACHMENT0;
+
   let framebuffers: Array<FramebufferInfo> = [];
+
   for (let i = 0; i < 2; i++) {
+    let attachments: AttachmentOptions[] = []
+    for (let textureIndex = 0; textureIndex < textureCount; textureIndex++) {
+      attachments.push({
+        attachmentPoint: gl.COLOR_ATTACHMENT0 + textureIndex,
+        attachment: dataTextures[textureIndex][i],
+      })
+    }
     framebuffers.push(
-      twgl.createFramebufferInfo(gl, [
-        {
-          format: gl.RGBA32F,
-          attachmentPoint: index + 0,
-          attachment: transformTexture[i],
-        },
-        {
-          format: gl.RGBA32F,
-          attachmentPoint: index + 1,
-          attachment: colorTexture[i],
-        },
-        {
-          format: gl.RGBA32F,
-          attachmentPoint: index + 2,
-          attachment: propertyTexture[i],
-        },
-      ])
+      twgl.createFramebufferInfo(gl, attachments)
     );
   }
 
@@ -475,16 +383,28 @@ void main() {
     return output;
   };
 
+  const uniforms = {} as { [key: string]: any }
+  const readTextures: WebGLTexture[] = []
+  for (let textureIndex = 0; textureIndex < textureCount; textureIndex++) {
+    readTextures.push(framebuffers[0].attachments[textureIndex])
+  }
+
+  const writeTextures: WebGLTexture[] = []
+  for (let textureIndex = 0; textureIndex < textureCount; textureIndex++) {
+    writeTextures.push(framebuffers[1].attachments[textureIndex])
+  }
+
+  uniforms.textureSize = textureSize
+  uniforms.particleCount = config.particleCount
+  uniforms.worldScale = config.worldScale
+
   return {
     count: config.particleCount,
     textureSize: textureSize,
-
-    textureTransform: framebuffers[0].attachments[0],
-    textureColor: framebuffers[0].attachments[1],
-    textureProperties: framebuffers[0].attachments[2],
+    dataTextures: readTextures,
 
     getState(index: number) {
-      return [getState(index, this.textureTransform), getState(index, this.textureColor), getState(index, this.textureProperties)] as const
+      return [getState(index, this.dataTextures[0]), getState(index, this.dataTextures[1]), getState(index, this.dataTextures[2])] as const
     },
 
     renderDistanceFunction(gl: WebGL2RenderingContext) {
@@ -531,28 +451,23 @@ void main() {
 
       twgl.bindFramebufferInfo(gl, framebuffers[1]);
       twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
-      twgl.setUniforms(programInfo, {
-        mouse: [0, 0, 0],
-        transformTexture: framebuffers[0].attachments[0],
-        colorTexture: framebuffers[0].attachments[1],
-        propertyTexture: framebuffers[0].attachments[2],
-        textureSize: textureSize,
-        particleCount: config.particleCount,
-        worldScale: config.worldScale,
-      });
+      uniforms.mouse = [0, 0, 0]
+
+      for (let textureIndex = 0; textureIndex < textureCount; textureIndex++) {
+        uniforms[`dataTexture${textureIndex}`] = framebuffers[0].attachments[textureIndex]
+      }
+
+      twgl.setUniforms(programInfo, uniforms);
 
       twgl.drawBufferInfo(gl, bufferInfo);
 
       twgl.bindFramebufferInfo(gl);
 
-      this.textureTransform = framebuffers[1].attachments[0];
-      this.textureColor = framebuffers[1].attachments[1];
-      this.textureProperties = framebuffers[1].attachments[2];
+      this.dataTextures = writeTextures
 
       framebuffers.reverse();
 
       if (config.onParticleState) {
-        console.log("read state")
         for (let i = 0; i < config.particleCount; i++) {
           config.onParticleState(i, this.getState(i));
         }

@@ -130,9 +130,9 @@ export const createParticleSimulationRenderer = (
 
         twgl.setUniforms(programInfo, {
             view: getView!(),
-            textureTransform: particleSimulation.textureTransform,
-            textureColor: particleSimulation.textureColor,
-            textureProperties: particleSimulation.textureProperties,
+            textureTransform: particleSimulation.dataTextures[0],
+            textureColor: particleSimulation.dataTextures[1],
+            textureProperties: particleSimulation.dataTextures[2],
             screenSize: [gl.drawingBufferWidth, gl.drawingBufferHeight],
         });
 
