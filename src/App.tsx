@@ -77,6 +77,19 @@ if (localStorage.getItem("config")) {
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const search = location.search;
+  const urlConfig = new URLSearchParams(search).get("config");
+  if (urlConfig) {
+    try {
+      const test = JSON.parse(decodeURIComponent(atob(urlConfig)));
+      if (test) {
+        initialConfig = test;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   const [config, setConfig] = useState(initialConfig);
   const [error, setError] = useState("");
   const [particleState, setParticleState] = useState<number[][][]>([]);
@@ -85,8 +98,8 @@ function App() {
   const updateConfig = (newConfig: Partial<SimulationConfig>) => {
     const temp = { ...config, ...newConfig };
     setConfig(temp);
-
-    localStorage.setItem("config", JSON.stringify(temp));
+    const str = JSON.stringify(temp);
+    localStorage.setItem("config", str);
   };
 
   const [tab, setTab] = useState("1");
@@ -246,11 +259,27 @@ function App() {
 
                   <Button
                     onClick={() => {
+                      const base64 = btoa(JSON.stringify(config, null, 2));
+
+                      navigator.clipboard.writeText(
+                        location.origin +
+                          location.pathname +
+                          "?config=" +
+                          encodeURIComponent(base64)
+                      );
+                    }}
+                    variant="contained"
+                  >
+                    copy unique url to clipboard
+                  </Button>
+
+                  <Button
+                    onClick={() => {
                       navigator.clipboard.writeText(
                         JSON.stringify(config, null, 2)
                       );
                     }}
-                    variant="contained"
+                    variant="text"
                   >
                     copy settings to clipboard
                   </Button>
@@ -259,7 +288,7 @@ function App() {
                     onClick={async () => {
                       setShowPasteDialog(true);
                     }}
-                    variant="contained"
+                    variant="text"
                   >
                     paste settings from clipboard
                   </Button>
