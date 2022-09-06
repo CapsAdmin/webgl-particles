@@ -1,0 +1,18 @@
+{
+  "files": {
+    "main.css": "/webgl-particles/static/css/main.d265cd9a.css",
+    "main.js": "/webgl-particles/static/js/main.da22b4a5.js",
+    "ts.worker.js": "/webgl-particles/ts.worker.js",
+    "css.worker.js": "/webgl-particles/css.worker.js",
+    "html.worker.js": "/webgl-particles/html.worker.js",
+    "json.worker.js": "/webgl-particles/json.worker.js",
+    "editor.worker.js": "/webgl-particles/editor.worker.js",
+    "index.html": "/webgl-particles/index.html",
+    "main.d265cd9a.css.map": "/webgl-particles/static/css/main.d265cd9a.css.map",
+    "main.da22b4a5.js.map": "/webgl-particles/static/js/main.da22b4a5.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.d265cd9a.css",
+    "static/js/main.da22b4a5.js"
+  ]
+}
