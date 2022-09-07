@@ -8,7 +8,7 @@ import {
 } from "react-zoom-pan-pinch";
 import ReactResizeDetector from "react-resize-detector";
 
-export type MapView = { get: () => readonly [number, number, number] };
+export type MapView = { get: () => readonly [number, number, number, number] };
 
 export const CanvasMap = (props: {
   canvasRef: RefObject<HTMLCanvasElement>;
