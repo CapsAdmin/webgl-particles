@@ -3,23 +3,24 @@ import { AttachmentOptions, FramebufferInfo } from "twgl.js";
 import { createProgramInfo, glsl, twgl } from "./other/WebGL";
 
 
+const PIXEL_COMPONENTS = 4
+
 const createDoubleBufferTexture = (
     size: number,
-    init: (i: number) => [number, number, number, number] | undefined,
+    init: (i: number) => number[] | undefined,
     gl: WebGL2RenderingContext
 ) => {
-    const data = new Float32Array(size * size * 4);
+    const data = new Float32Array(size * size * PIXEL_COMPONENTS);
     for (let i = 0; i < size * size; i++) {
         const arr = init(i);
         if (!arr) {
             break;
         }
-        let O = i * 4 - 1;
+        let O = i * PIXEL_COMPONENTS - 1;
 
-        data[++O] = arr[0];
-        data[++O] = arr[1];
-        data[++O] = arr[2];
-        data[++O] = arr[3];
+        for (let j = 0; j < PIXEL_COMPONENTS; j++) {
+            data[++O] = arr[j];
+        }
     }
 
     let out = [];
@@ -31,7 +32,6 @@ const createDoubleBufferTexture = (
                 height: size,
                 format: gl.RGBA,
                 internalFormat: gl.RGBA32F,
-                type: gl.FLOAT,
                 src: data,
                 min: gl.NEAREST,
                 mag: gl.NEAREST,
@@ -71,8 +71,8 @@ export const createFragmentComputeShader = (
     let offsetData: Record<string, Record<string, { name: string, index?: number }>> = {}
 
     for (const [key, val] of Object.entries(ItemStructure)) {
-        const textureIndex = Math.floor(floatCount / 4)
-        const textureOffset = floatCount % 4
+        const textureIndex = Math.floor(floatCount / PIXEL_COMPONENTS)
+        const textureOffset = floatCount % PIXEL_COMPONENTS
         let len = (typeof val == "number" ? 1 : val.length)
 
         let glslIndex = "xyzw"
@@ -80,7 +80,7 @@ export const createFragmentComputeShader = (
 
         offsetData[textureIndex] = offsetData[textureIndex] || {}
 
-        for (let i = textureOffset; i < 4; i++) {
+        for (let i = textureOffset; i < PIXEL_COMPONENTS; i++) {
             offsetData[textureIndex][i] = { name: key, index: len == 1 ? undefined : (textureOffset + i - textureOffset) % len }
         }
 
@@ -108,7 +108,9 @@ export const createFragmentComputeShader = (
         floatCount += len
     }
 
-    const textureCount = Math.ceil(floatCount / 4)
+
+    const textureCount = Math.ceil(floatCount / PIXEL_COMPONENTS)
+    console.log(offsetData, textureCount, sharedShaderCode)
 
     let fragmentShaderHeader = ""
     for (let i = 0; i < textureCount; i++) {
@@ -186,12 +188,12 @@ export const createFragmentComputeShader = (
             textureSize,
             (particleIndex) => {
                 if (particleIndex < particleCount) {
-                    return [
-                        getValue(particleIndex, textureIndex, 0),
-                        getValue(particleIndex, textureIndex, 1),
-                        getValue(particleIndex, textureIndex, 2),
-                        getValue(particleIndex, textureIndex, 3),
-                    ];
+                    let out = []
+                    for (let i = 0; i < PIXEL_COMPONENTS; i++) {
+                        out[i] = getValue(particleIndex, textureIndex, i)
+
+                    }
+                    return out
                 }
             },
             gl
@@ -263,7 +265,7 @@ export const createFragmentComputeShader = (
 
                 gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
 
-                const output = new Float32Array(4);
+                const output = new Float32Array(PIXEL_COMPONENTS);
 
                 let idx = index;
                 let x = Math.trunc(idx / textureSize);
