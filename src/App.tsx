@@ -1,19 +1,24 @@
 import { Menu } from "@mui/icons-material";
-import { IconButton } from "@mui/material";
+import { IconButton, Typography } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import "react-splitter-layout/lib/index.css";
 import { CanvasMap, MapView } from "./components/CanvasMap";
 import { GithubLink } from "./components/GithubLink";
 import "./global.css";
-import { ConifgEditor } from "./gui/ConfigEditor";
+import { ConifgEditor } from "./SimulationEditor";
 import { createParticleSimulationRenderer } from "./Renderer";
 import { createParticleSimulation } from "./Simulation";
 import { useSimulationConfig } from "./useSimulationConfig";
 
 function App() {
   const [config, setConfig] = useSimulationConfig();
-  const [error, setError] = useState("");
+  let [error, setError] = useState("");
   const [showEditor, setShowEditor] = useState(false);
+
+  const shaderError = error.includes("SHADER: ERROR") ? error : undefined;
+  if (shaderError) {
+    error = "";
+  }
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<MapView>(null);
@@ -43,7 +48,6 @@ function App() {
       setError("");
       return destroy;
     } catch (err: any) {
-      console.error(err);
       if (typeof err == "string") {
         setError(err);
       } else if (err.message) {
@@ -68,15 +72,40 @@ function App() {
           worldScale={config.worldScale}
           viewRef={viewRef}
           canvasRef={canvasRef}
-          error={error}
         />
       </div>
+
+      {error ? (
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            overflow: "auto",
+          }}
+        >
+          {error.split("\n").map((line, i) => (
+            <Typography
+              align="left"
+              style={{
+                wordWrap: "break-word",
+                backgroundColor: "black",
+                zIndex: 100,
+              }}
+              color="error"
+            >
+              {line}
+            </Typography>
+          ))}
+        </div>
+      ) : null}
 
       <ConifgEditor
         config={config}
         updateConfig={setConfig}
         onClose={() => setShowEditor(false)}
         show={showEditor}
+        shaderError={shaderError}
       />
 
       <div

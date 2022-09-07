@@ -1,14 +1,41 @@
-import Editor from "@monaco-editor/react";
-import type { editor } from "monaco-editor";
+import Editor, { Monaco } from "@monaco-editor/react";
+import { editor, MarkerSeverity } from "monaco-editor";
 import { registerGLSL } from "../other/GLSLLanguage";
 import ReactResizeDetector from "react-resize-detector";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 export const CodeEditor = (props: {
   code: string;
   onChange: (code: string) => void;
   language: string;
+  errors?: Array<{ line: number; column: number; message: string }>;
 }) => {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<Monaco>();
+
+  useEffect(() => {
+    if (!props.errors) return;
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const model = editor.getModel();
+    if (!model) return;
+
+    const monaco = monacoRef.current;
+    if (!monaco) return;
+
+    const markers = props.errors.map((error) => {
+      return {
+        severity: MarkerSeverity.Error,
+        startLineNumber: error.line - 1,
+        startColumn: error.column + 1,
+        endLineNumber: error.line - 1,
+        endColumn: error.column + 100,
+        message: error.message,
+      };
+    });
+    monaco.editor.setModelMarkers(model, "errors", markers);
+  }, [props.errors]);
+
   return (
     <ReactResizeDetector
       handleWidth
@@ -49,6 +76,7 @@ export const CodeEditor = (props: {
             });
           }}
           onMount={(editor, monaco) => {
+            monacoRef.current = monaco;
             editorRef.current = editor;
             registerGLSL(monaco);
           }}

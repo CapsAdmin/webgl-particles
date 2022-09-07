@@ -13,7 +13,6 @@ export type MapView = { get: () => readonly [number, number, number, number] };
 export const CanvasMap = (props: {
   canvasRef: RefObject<HTMLCanvasElement>;
   viewRef: RefObject<MapView>;
-  error?: string;
   viewSize: number;
   worldScale: number;
 }) => {
@@ -142,22 +141,6 @@ export const CanvasMap = (props: {
             );
           }}
         </TransformWrapper>
-
-        <Typography
-          align="left"
-          style={{
-            wordWrap: "break-word",
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            backgroundColor: "black",
-            zIndex: 100,
-          }}
-          color="error"
-        >
-          {props.error}
-        </Typography>
       </div>
     </ReactResizeDetector>
   );

@@ -19,10 +19,10 @@ import {
 import { Stack } from "@mui/system";
 import { useState } from "react";
 import "react-splitter-layout/lib/index.css";
-import { CodeEditor } from "../components/CodeEditor";
-import { ExponentialSlider } from "../components/ExponentialSlider";
-import { ParticleStateTable } from "../components/ParticleStateTable";
-import { defaultConfig, SimulationConfig } from "../Simulation";
+import { CodeEditor } from "./components/CodeEditor";
+import { ExponentialSlider } from "./components/ExponentialSlider";
+import { ParticleStateTable } from "./components/ParticleStateTable";
+import { defaultConfig, SimulationConfig } from "./Simulation";
 
 let initialConfig = defaultConfig;
 if (localStorage.getItem("config")) {
@@ -43,6 +43,7 @@ export const ConifgEditor = (props: {
   show: boolean;
   config: SimulationConfig;
   updateConfig: (config: Partial<SimulationConfig>) => void;
+  shaderError?: string;
 }) => {
   const config = props.config;
   const updateConfig = props.updateConfig;
@@ -65,6 +66,43 @@ export const ConifgEditor = (props: {
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [showPasteDialog, setShowPasteDialog] = useState(false);
   const [pasteText, setPasteText] = useState("");
+
+  let shaderErrors = [];
+  if (props.shaderError) {
+    let startOffset = 0;
+    const lines = props.shaderError.split("\n");
+    for (const line of lines) {
+      if (line.includes("//CUSTOM_CODE_START")) {
+        break;
+      }
+      startOffset++;
+    }
+    const done = new Set<string>();
+    for (const line of lines) {
+      if (line.includes("ERROR: ")) {
+        const match = line.match(/ERROR: (\d+):(\d+):(.+)/);
+        if (match) {
+          const colNumber = parseInt(match[1], 10);
+          const lineNumber = parseInt(match[2], 10);
+          const message = match[3];
+          if (
+            colNumber >= 0 &&
+            lineNumber >= 0 &&
+            message &&
+            !done.has(message)
+          ) {
+            shaderErrors.push({
+              line: lineNumber - startOffset,
+              column: colNumber,
+              message,
+            });
+
+            done.add(message);
+          }
+        }
+      }
+    }
+  }
 
   return (
     <>
@@ -105,6 +143,7 @@ export const ConifgEditor = (props: {
 
             <TabPanel value="2" style={{ height: "100%" }}>
               <CodeEditor
+                errors={shaderErrors}
                 language="glsl"
                 code={config.simulationCode}
                 onChange={(code) => {

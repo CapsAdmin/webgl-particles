@@ -144,7 +144,9 @@ export const createParticleSimulation = (
     uniform vec3 mouse;
     uniform float worldScale;
 
+    //CUSTOM_CODE_START
     ${config.simulationCode}
+    //CUSTOM_CODE_END
     
   `)
 
