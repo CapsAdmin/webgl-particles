@@ -48,6 +48,7 @@ function App() {
       setError("");
       return destroy;
     } catch (err: any) {
+      console.error(err);
       if (typeof err == "string") {
         setError(err);
       } else if (err.message) {
