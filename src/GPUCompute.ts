@@ -110,7 +110,6 @@ export const createFragmentComputeShader = (
 
 
     const textureCount = Math.ceil(floatCount / PIXEL_COMPONENTS)
-    console.log(offsetData, textureCount, sharedShaderCode)
 
     let fragmentShaderHeader = ""
     for (let i = 0; i < textureCount; i++) {

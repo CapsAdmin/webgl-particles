@@ -24,6 +24,7 @@ p.color = chroma.hsv((i / max) * 360, 0.9, 1).gl()
   onParticleState: undefined as undefined | ((i: number, state: Float32Array[]) => void),
   simulationCode:
     glsl`
+
 vec3 rgb2hsv(vec3 c)
 {
     vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
@@ -49,6 +50,16 @@ vec2 rotate(vec2 v, float a) {
   return m * v;
 }
 
+highp float rand(vec2 co)
+{
+    highp float a = 12.9898;
+    highp float b = 78.233;
+    highp float c = 43758.5453;
+    highp float dt= dot(co.xy ,vec2(a,b));
+    highp float sn= mod(dt,3.14);
+    return fract(sin(sn) * c);
+}
+
 void update(int index) {
 
   vec2 pos = getPosition();
@@ -59,33 +70,42 @@ void update(int index) {
   float friction = getFriction();
   vec3 hsv = rgb2hsv(color.rgb);
 
-  for (int i = 0; i < particleCount; i++) {
-      if (i == index) continue;
-  
-      vec2 otherPos = getPosition(i);
-      vec2 otherVel = getVelocity(i);
-      vec4 otherColor = getColor(i);
+  // being red is less energetic
+  float attraction = -pow(-(gravity * hsv.r * 2.0), 0.8);
+
+  // only update 500 random particles every frame
+  float baseSeed = fract(time/1000000.0) + float(index);
+  float maxIterations = 500.0;
+    
+  for (float i = 0.0; i < maxIterations; i++) {
+      float seed = (i/maxIterations) + baseSeed;
+      int particleIndex = int(rand(vec2(seed, seed)) * float(particleCount));
+
+      vec2 otherPos = getPosition(particleIndex);
+      vec2 otherVel = getVelocity(particleIndex);
+      vec4 otherColor = getColor(particleIndex);
       
       vec2 direction = pos-otherPos;
       float len = length(direction);
 
       if (len <= 0.0) continue;
-        vec3 otherHSV = rgb2hsv(otherColor.rgb);
+            
+      vec3 otherHSV = rgb2hsv(otherColor.rgb);
 
       if (len < size) {
         // collision
 
         vec2 normal = normalize(direction);
         vec2 velDiff = otherVel - vel;
-        vel += normal * max(dot(normal, velDiff) * 1.0, 0.0);
+        vel += normal * max(dot(normal, velDiff) * 1.0, 0.0) ;
 
         // transfer color for some reason
-        hsv.x = hsv.x + otherHSV.x/len/100000.0;
+        hsv.x = hsv.x + otherHSV.x/len/10000.0;
         color.rgb = hsv2rgb(hsv);
       } else if (len < size * 1.5) {
         // keep some distance
           
-        vel -= direction * gravity / ((len*len + 0.000001) * len);
+        vel -= direction * attraction / ((len*len + 0.000001) * len) ;
 
       } else {
         // attraction
@@ -93,15 +113,15 @@ void update(int index) {
         // influence direction with color by rotating it
         float hueDiff = otherHSV.x-hsv.x;
         direction = rotate(direction, hueDiff);
-        direction = direction+ (direction*hueDiff*-5.0);
+        direction = direction+ (direction*hueDiff*3.5);
 
-        vel += direction * gravity / ((len*len + 0.000001) * len);
+        vel += direction * attraction / ((len*len + 0.000001) * len) ;
       }
   }
+  
   vel *= friction;
-  pos += vel;
-  
-  
+  pos += vel * deltaTime * 100.0;
+    
   if (pos.x > worldScale) {
     pos.x = -worldScale;
   } else if (pos.x < -worldScale) {
@@ -121,6 +141,7 @@ void update(int index) {
   setSize(size);
   setFriction(friction);
 }
+
 `,
 };
 
@@ -142,7 +163,9 @@ export const createParticleSimulation = (
 
   const compute = createFragmentComputeShader(gl, particles, glsl`
     uniform vec3 mouse;
+    uniform float time;
     uniform float worldScale;
+    uniform float deltaTime;
 
     //CUSTOM_CODE_START
     ${config.simulationCode}
@@ -152,10 +175,11 @@ export const createParticleSimulation = (
 
   return {
     compute,
-    update(mx: number, my: number, pressed: number) {
+    update(dt: number) {
       compute.update({
         worldScale: config.worldScale,
-        //mouse: [mx, my, pressed]
+        time: Date.now() / 1000,
+        deltaTime: dt,
       })
 
       if (config.onParticleState) {

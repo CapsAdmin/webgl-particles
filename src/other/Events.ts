@@ -39,12 +39,18 @@ export const mouseEvents = (canvas: HTMLCanvasElement) => {
     return [read, destroy] as const;
 }
 
-export const renderLoop = (onRender: () => void) => {
+export const renderLoop = (onRender: (dt: number) => void) => {
     let stop = false;
+
+    let lastUpdate = Date.now() / 1000;
 
     const update = () => {
         if (stop) return;
-        onRender()
+
+        const dt = Date.now() / 1000 - lastUpdate
+        onRender(dt)
+        let stopTime = (Date.now() / 1000)
+        lastUpdate = stopTime;
         requestAnimationFrame(update);
     }
 

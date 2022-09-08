@@ -168,6 +168,9 @@ export const ConifgEditor = (props: {
                       { value: 10000, label: "10k" },
                       { value: 20000, label: "20k" },
                       { value: 30000, label: "30k" },
+                      { value: 50000, label: "50k" },
+                      { value: 100000, label: "100k" },
+                      { value: 1000000, label: "1m" },
                     ]}
                     value={config.particleCount}
                     onChange={(num) => {
