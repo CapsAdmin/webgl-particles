@@ -22,7 +22,7 @@ import "react-splitter-layout/lib/index.css";
 import { CodeEditor } from "./components/CodeEditor";
 import { ExponentialSlider } from "./components/ExponentialSlider";
 import { ParticleStateTable } from "./components/ParticleStateTable";
-import { defaultConfig, SimulationConfig } from "./Simulation";
+import { balancedMatch, defaultConfig, SimulationConfig } from "./Simulation";
 
 let initialConfig = defaultConfig;
 if (localStorage.getItem("config")) {
@@ -70,9 +70,35 @@ export const ConifgEditor = (props: {
   let shaderErrors = [];
   if (props.shaderError) {
     let startOffset = 0;
+    let type;
+
+    if (props.shaderError.includes("//CUSTOM_COMPUTE_CODE_START")) {
+      type = "COMPUTE";
+    } else if (props.shaderError.includes("//CUSTOM_RENDER_CODE_START")) {
+      type = "RENDER";
+    } else {
+      throw new Error("Unknown shader error");
+    }
+
+    {
+      const [start, stop] = balancedMatch(props.config.shaderCode, type);
+      const otherCodeStart = props.config.shaderCode.substring(0, start);
+      const otherCodeStop = props.config.shaderCode.substring(
+        stop,
+        props.config.shaderCode.length
+      );
+
+      for (const line of (otherCodeStart + otherCodeStop).split("\n")) {
+        if (line.includes(type)) {
+          break;
+        }
+        startOffset--;
+      }
+    }
+
     const lines = props.shaderError.split("\n");
     for (const line of lines) {
-      if (line.includes("//CUSTOM_CODE_START")) {
+      if (line.includes("//CUSTOM_" + type + "_CODE_START")) {
         break;
       }
       startOffset++;
@@ -145,9 +171,9 @@ export const ConifgEditor = (props: {
               <CodeEditor
                 errors={shaderErrors}
                 language="glsl"
-                code={config.simulationCode}
+                code={config.shaderCode}
                 onChange={(code) => {
-                  updateConfig({ simulationCode: code });
+                  updateConfig({ shaderCode: code });
                 }}
               />
             </TabPanel>

@@ -12,53 +12,44 @@ export const createParticleSimulationRenderer = (
         getView = (() => [0, 0, 1, 1]);
     }
     const VERTEX = glsl`
+    
     in vec2 pos;
     
     uniform vec4 view;
-    uniform sampler2D textureTransform;
-    uniform sampler2D textureColor;
-    uniform sampler2D textureProperties;
     uniform int textureSize;
-    
-    out vec4 outColor;
-    out vec4 outProperties;
-    out vec4 outTransform;
+
+    ${particleSimulation.compute.vertexShaderHeader}
     
     void main() {
         int index = gl_VertexID / 6;
-        int y =  index % textureSize;
+        int y = index % textureSize;
         int x = index / textureSize;
 
-        outTransform = texelFetch(textureTransform, ivec2(y, x), 0);
-        outColor = texelFetch(textureColor, ivec2(y, x), 0);
-        outProperties = texelFetch(textureProperties, ivec2(y, x), 0);
+        dataTexture0Out = texelFetch(dataTexture0, ivec2(y, x), 0);
+        dataTexture1Out = texelFetch(dataTexture1, ivec2(y, x), 0);
+        dataTexture2Out = texelFetch(dataTexture2, ivec2(y, x), 0);
         
-        float size = (outProperties.y/2.0 + 0.01) * view.z;
-        gl_Position = vec4((((pos) * size) + (outTransform.xy * view.z) + view.xy), 0, 1);
+        float size = (dataTexture2Out.y/2.0 + 0.01) * view.z;
+        gl_Position = vec4((((pos) * size) + (dataTexture0Out.xy * view.z) + view.xy), 0, 1);
     }
     `;
 
     const FRAGMENT = glsl`
+    
     out vec4 fragColor;
-    
+
     uniform vec2 screenSize;
-    
     uniform vec4 view;
 
-    in vec4 outColor;
-    in vec4 outProperties;
-    in vec4 outTransform;
-    
+    ${particleSimulation.compute.vertexToFragmentHeader}
+    ${particleSimulation.compute.renderShaderCode}
+
+    //CUSTOM_RENDER_CODE_START
+    ${particleSimulation.renderCode}
+
     void main() {
-        float size = (outProperties.y/2.0 + 0.01) * view.z;
         vec2 screenPos = (gl_FragCoord.xy/screenSize)*2.0-1.0;
-        vec2 pos = outTransform.xy * view.z;
-        pos += view.xy;
-        float alpha = -length(pos - screenPos)*(1.0/size)+1.0;
-    
-        alpha = pow(alpha, 0.8);
-    
-        fragColor = vec4(outColor.rgb, alpha);
+        fragColor = render(screenPos, view.xy, view.z);
     }
     `;
 
@@ -97,13 +88,19 @@ export const createParticleSimulationRenderer = (
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.useProgram(programInfo.program);
 
+        const dataTextures: Record<string, WebGLTexture> = {}
+
+        let i = 0
+        for (const texture of particleSimulation.compute.dataTextures) {
+            dataTextures["dataTexture" + i] = texture
+            i++
+        }
+
         twgl.setUniforms(programInfo, {
             view: getView!(),
             textureSize: particleSimulation.compute.textureSize,
-            textureTransform: particleSimulation.compute.dataTextures[0],
-            textureColor: particleSimulation.compute.dataTextures[1],
-            textureProperties: particleSimulation.compute.dataTextures[2],
             screenSize: [gl.drawingBufferWidth, gl.drawingBufferHeight],
+            ...dataTextures
         });
 
         twgl.setBuffersAndAttributes(gl, programInfo, quadBuffer);

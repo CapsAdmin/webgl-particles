@@ -67,6 +67,7 @@ export const createFragmentComputeShader = (
     let floatCount = 0;
     let sharedShaderCode = ""
     let writeShaderCode = ""
+    let renderShaderCode = ""
 
     let offsetData: Record<string, Record<string, { name: string, index?: number }>> = {}
 
@@ -98,6 +99,13 @@ export const createFragmentComputeShader = (
         }
         `
 
+        renderShaderCode +=
+            `
+    ${types[len - 1]} get${key.charAt(0).toUpperCase() + key.slice(1)}() {
+        return dataTexture${textureIndex}Out.${glslIndex.substring(textureOffset, textureOffset + len)};
+    }
+    `
+
         writeShaderCode +=
             `
         void set${key.charAt(0).toUpperCase() + key.slice(1)}(${types[len - 1]} val) {
@@ -111,17 +119,38 @@ export const createFragmentComputeShader = (
 
     const textureCount = Math.ceil(floatCount / PIXEL_COMPONENTS)
 
-    let fragmentShaderHeader = ""
+    let uniformDeclarations = ""
     for (let i = 0; i < textureCount; i++) {
-        fragmentShaderHeader += `uniform sampler2D dataTexture${i};
+        uniformDeclarations += `uniform sampler2D dataTexture${i};
     `
     }
 
-    let vertexShaderHeader = fragmentShaderHeader
+    let fragmendShaderOutput = uniformDeclarations
     for (let i = 0; i < textureCount; i++) {
-        vertexShaderHeader += `layout(location=${i}) out vec4 dataTexture${i}Out;
+        fragmendShaderOutput += `layout(location=${i}) out vec4 dataTexture${i}Out;
         `
     }
+
+    let vertexShaderHeader = uniformDeclarations
+    for (let i = 0; i < textureCount; i++) {
+        vertexShaderHeader += `out vec4 dataTexture${i}Out;
+        `
+    }
+
+    let vertexToFragmentHeader = ""
+    for (let i = 0; i < textureCount; i++) {
+        vertexToFragmentHeader += `in vec4 dataTexture${i}Out;
+        `
+    }
+
+    let textureFetchFunctions = `
+    vec4 fetchFromIndex(sampler2D texture, int index) {
+        return texelFetch(texture, ivec2(index%textureSize, index/textureSize), 0);
+    }
+    
+    vec4 fetchFromXY(sampler2D texture) {
+        return texelFetch(texture, ivec2(gl_FragCoord.x, gl_FragCoord.y), 0);
+    }`
 
     const VERTEX = glsl`
         in vec2 pos;
@@ -135,15 +164,9 @@ export const createFragmentComputeShader = (
     uniform int particleCount;
     uniform int textureSize;
 
-    vec4 fetchFromIndex(sampler2D texture, int index) {
-        return texelFetch(texture, ivec2(index%textureSize, index/textureSize), 0);
-    }
     
-    vec4 fetchFromXY(sampler2D texture) {
-        return texelFetch(texture, ivec2(gl_FragCoord.x, gl_FragCoord.y), 0);
-    }
-    
-    ${vertexShaderHeader}
+    ${textureFetchFunctions}
+    ${fragmendShaderOutput}
     ${sharedShaderCode}
     ${writeShaderCode}
 
@@ -242,6 +265,10 @@ export const createFragmentComputeShader = (
         count: particleCount,
         textureSize: textureSize,
         dataTextures: readTextures,
+        sharedShaderCode,
+        vertexShaderHeader,
+        vertexToFragmentHeader,
+        renderShaderCode,
 
         getState(index: number) {
             let state = []
