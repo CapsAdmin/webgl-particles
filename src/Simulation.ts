@@ -53,24 +53,6 @@ p.color = chroma.hsv((i / max) * 360, 0.9, 1).gl()
     glsl`
 
 COMPUTE {
-  vec3 rgb2hsv(vec3 c)
-  {
-      vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-      vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-      vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-
-      float d = q.x - min(q.w, q.y);
-      float e = 1.0e-10;
-      return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-  }
-
-  vec3 hsv2rgb(vec3 c)
-  {
-      vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-      vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-      return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-  }
-
   vec2 rotate(vec2 v, float a) {
     float s = sin(a);
     float c = cos(a);
@@ -78,14 +60,13 @@ COMPUTE {
     return m * v;
   }
 
-  highp float rand(vec2 co)
-  {
-      highp float a = 12.9898;
-      highp float b = 78.233;
-      highp float c = 43758.5453;
-      highp float dt= dot(co.xy ,vec2(a,b));
-      highp float sn= mod(dt,3.14);
-      return fract(sin(sn) * c);
+  void init(int index) {
+    setPosition(vec2(random(vec2(float(index), float(index)))*2.0-1.0, random(vec2(float(index), float(index))*-1.0)*2.0-1.0));
+    setVelocity(vec2(0, 0));
+    setGravity(-0.00001);
+    setSize(0.05 + random(vec2(gl_FragCoord))*0.07);
+    setFriction(0.9);
+    setColor(vec4(hsv2rgb(vec3(float(index) / float(particleCount), 0.9, 1)), 1.0));
   }
 
   void update(int index) {
@@ -106,7 +87,7 @@ COMPUTE {
       
     for (float i = 0.0; i < maxIterations; i++) {
         float seed = (i/maxIterations) + baseSeed;
-        int particleIndex = int(rand(vec2(seed, seed)) * float(particleCount));
+        int particleIndex = int(random(vec2(seed, seed)) * float(particleCount));
 
         vec2 otherPos = getPosition(particleIndex);
         vec2 otherVel = getVelocity(particleIndex);
@@ -190,22 +171,43 @@ export const createParticleSimulation = (
 ) => {
   const config = { ...defaultConfig, ...configOverride };
 
-  const buildParticle = eval("(i, max) => { const p = {}\n " + config.buildParticles + "\n return p }") as (i: number, max: number) => any
-
-  const particles: Array<any> = []
-  globalThis.chroma = chroma
-  for (let i = 0; i < config.particleCount; i++) {
-    particles.push(buildParticle(i, config.particleCount))
-  }
-
   const computeCode = config.shaderCode.substring(...balancedMatch(config.shaderCode, "COMPUTE"))
   const renderCode = config.shaderCode.substring(...balancedMatch(config.shaderCode, "RENDER"))
 
-  const compute = createFragmentComputeShader(gl, particles, glsl`
+  const compute = createFragmentComputeShader(gl, config.particleCount, glsl`
     uniform vec3 mouse;
     uniform float time;
     uniform float worldScale;
     uniform float deltaTime;
+
+    vec3 rgb2hsv(vec3 c)
+    {
+        vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+        vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+        vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+  
+        float d = q.x - min(q.w, q.y);
+        float e = 1.0e-10;
+        return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+    }
+  
+    vec3 hsv2rgb(vec3 c)
+    {
+        vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+        vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+        return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+    }
+  
+    float random(vec2 co)
+    {
+        float a = 12.9898;
+        float b = 78.233;
+        float c = 43758.5453;
+        float dt = dot(co.xy, vec2(a,b));
+        float sn = mod(dt, 3.14);
+  
+        return fract(sin(sn) * c);
+    }
 
     //CUSTOM_COMPUTE_CODE_START
     ${computeCode}

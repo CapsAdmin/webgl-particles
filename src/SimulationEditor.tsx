@@ -148,26 +148,15 @@ export const ConifgEditor = (props: {
                   setTab(v);
                 }}
               >
-                <Tab color="red" label="init" value="1" />
-                <Tab color="red" label="simulation" value="2" />
-                <Tab color="red" label="settings" value="3" />
+                <Tab color="red" label="simulation" value="simulation" />
+                <Tab color="red" label="settings" value="settings" />
                 {config.particleCount < 30 ? (
-                  <Tab color="red" label="state" value="4" />
+                  <Tab color="red" label="state" value="state" />
                 ) : null}
               </TabList>
             </Box>
 
-            <TabPanel value="1" style={{ height: "100%" }}>
-              <CodeEditor
-                language="javascript"
-                code={config.buildParticles}
-                onChange={(code) => {
-                  updateConfig({ buildParticles: code });
-                }}
-              />
-            </TabPanel>
-
-            <TabPanel value="2" style={{ height: "100%" }}>
+            <TabPanel value="simulation" style={{ height: "100%" }}>
               <CodeEditor
                 errors={shaderErrors}
                 language="glsl"
@@ -178,7 +167,7 @@ export const ConifgEditor = (props: {
               />
             </TabPanel>
 
-            <TabPanel value="3" style={{ display: "flex" }}>
+            <TabPanel value="settings" style={{ display: "flex" }}>
               <Stack padding={3} spacing={2} style={{ flex: 1 }}>
                 <Box>
                   <Typography variant="body1">particle count</Typography>
@@ -269,7 +258,7 @@ export const ConifgEditor = (props: {
               </Stack>
             </TabPanel>
 
-            <TabPanel value="4" style={{ display: "flex" }}>
+            <TabPanel value="state" style={{ display: "flex" }}>
               {config.particleCount < 30 ? (
                 <Card>
                   <Stack direction={"row"} alignItems="center">

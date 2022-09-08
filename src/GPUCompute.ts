@@ -7,21 +7,9 @@ const PIXEL_COMPONENTS = 4
 
 const createDoubleBufferTexture = (
     size: number,
-    init: (i: number) => number[] | undefined,
     gl: WebGL2RenderingContext
 ) => {
     const data = new Float32Array(size * size * PIXEL_COMPONENTS);
-    for (let i = 0; i < size * size; i++) {
-        const arr = init(i);
-        if (!arr) {
-            break;
-        }
-        let O = i * PIXEL_COMPONENTS - 1;
-
-        for (let j = 0; j < PIXEL_COMPONENTS; j++) {
-            data[++O] = arr[j];
-        }
-    }
 
     let out = [];
 
@@ -47,10 +35,9 @@ const createDoubleBufferTexture = (
 type StructureType = Record<string, number | [number, number] | [number, number, number] | [number, number, number, number]>
 export const createFragmentComputeShader = (
     gl: WebGL2RenderingContext,
-    items: StructureType[],
+    particleCount: number,
     shaderCode: string,
 ) => {
-    const particleCount = items.length
     const FLOAT = 0 as number
 
     const ItemStructure: StructureType = {
@@ -61,8 +48,6 @@ export const createFragmentComputeShader = (
         size: FLOAT,
         friction: FLOAT,
     }
-
-    type Item = typeof ItemStructure
 
     let floatCount = 0;
     let sharedShaderCode = ""
@@ -163,6 +148,7 @@ export const createFragmentComputeShader = (
     const FRAGMENT = glsl`    
     uniform int particleCount;
     uniform int textureSize;
+    uniform int frame;
 
     
     ${textureFetchFunctions}
@@ -182,7 +168,11 @@ export const createFragmentComputeShader = (
             discard;
         }
 
-        update(indexParticle);
+        if (frame == 0) {
+            init(indexParticle);
+        } else {   
+            update(indexParticle);
+        }
     }
 `;
 
@@ -193,33 +183,9 @@ export const createFragmentComputeShader = (
 
 
     const dataTextures = []
-    const getValue = (particleIndex: number, textureIndex: number, offset: number) => {
-        const lookup = offsetData[textureIndex]
-        const data = lookup[offset]
-        const key = data.name as keyof typeof items[number]
-        const val = items[particleIndex][key]
-
-        if (typeof data.index === "number") {
-            return (val as any)[data.index]
-        }
-        return val
-    }
 
     for (let textureIndex = 0; textureIndex < textureCount; textureIndex++) {
-        dataTextures.push(createDoubleBufferTexture(
-            textureSize,
-            (particleIndex) => {
-                if (particleIndex < particleCount) {
-                    let out = []
-                    for (let i = 0; i < PIXEL_COMPONENTS; i++) {
-                        out[i] = getValue(particleIndex, textureIndex, i)
-
-                    }
-                    return out
-                }
-            },
-            gl
-        ))
+        dataTextures.push(createDoubleBufferTexture(textureSize, gl))
     }
 
     const program = createProgramInfo(gl, VERTEX, FRAGMENT);
@@ -260,6 +226,8 @@ export const createFragmentComputeShader = (
 
     uniforms.textureSize = textureSize
     uniforms.particleCount = particleCount
+
+    let frame = 0
 
     return {
         count: particleCount,
@@ -318,6 +286,8 @@ export const createFragmentComputeShader = (
                 uniforms[key] = additionalUniforms[key]
             }
 
+            uniforms.frame = frame;
+
             twgl.setUniforms(program, uniforms);
 
             twgl.drawBufferInfo(gl, quadBuffer);
@@ -327,6 +297,8 @@ export const createFragmentComputeShader = (
             this.dataTextures = writeTextures
 
             framebuffers.reverse();
+
+            frame++;
         },
     };
 };
