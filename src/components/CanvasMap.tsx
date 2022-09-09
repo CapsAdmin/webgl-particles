@@ -31,18 +31,37 @@ export const CanvasMap = (props: {
       handleWidth
       handleHeight
       onResize={(width, height) => {
-        setViewWidth(width || 700);
-        setViewHeight(height || 700);
-        panRef.current?.centerView(undefined, 0);
+        width = width || 700;
+        height = height || 700;
+        const pan = panRef.current!;
+        setViewWidth(width);
+        setViewHeight(height);
+
+        let x = 0;
+        let y = 0;
+
+        if (width > height) {
+          y = height * 0.5 * (-(width / height) + 1);
+        } else {
+          x = width * 0.5 * (-(height / width) + 1);
+        }
+
+        panRef.current?.setTransform(x, y, panRef.current?.state.scale, 0);
       }}
     >
-      <div style={{ position: "relative", flex: 1, height: "100vh" }}>
+      <div
+        style={{
+          position: "relative",
+          flex: 1,
+          height: "100vh",
+        }}
+      >
         <TransformWrapper
           initialPositionX={0}
           initialPositionY={0}
           initialScale={viewWidth / worldWidth}
-          minScale={0.05}
-          maxScale={5}
+          minScale={0.01}
+          maxScale={7}
           limitToBounds={false}
         >
           {(pan) => {
@@ -52,8 +71,18 @@ export const CanvasMap = (props: {
               get: () => {
                 const scale = pan.state.scale;
 
-                let x = -(pan.state.positionX - viewWidth / 2) / worldWidth;
-                let y = -(pan.state.positionY - viewHeight / 2) / worldHeight;
+                let x = pan.state.positionX;
+                let y = pan.state.positionY;
+
+                x = -(x - viewWidth / 2) / worldWidth;
+                y = -(y - viewHeight / 2) / worldHeight;
+
+                if (viewWidth < viewHeight) {
+                  x *= viewWidth / viewHeight;
+                } else {
+                  y *= viewHeight / viewWidth;
+                }
+
                 x = x * (1 / scale);
                 y = y * (1 / scale);
 
@@ -85,7 +114,26 @@ export const CanvasMap = (props: {
                   <Stack direction={"column"}>
                     <IconButton
                       size="small"
-                      onClick={() => pan.resetTransform(1000)}
+                      onClick={() => {
+                        let x = 0;
+                        let y = 0;
+
+                        let width = viewWidth;
+                        let height = viewHeight;
+
+                        if (width > height) {
+                          y = height * 0.5 * (-(width / height) + 1);
+                        } else {
+                          x = width * 0.5 * (-(height / width) + 1);
+                        }
+
+                        panRef.current?.setTransform(
+                          x,
+                          y,
+                          viewWidth / worldWidth,
+                          1000
+                        );
+                      }}
                     >
                       <GpsFixed />
                     </IconButton>
@@ -117,8 +165,6 @@ export const CanvasMap = (props: {
                     style={{
                       width: worldWidth,
                       height: worldHeight,
-                      background:
-                        "radial-gradient(circle, rgba(10,10,10,1) 0%, rgba(0,0,0,1) 50%) ",
                     }}
                   ></div>
                 </TransformComponent>
@@ -127,9 +173,10 @@ export const CanvasMap = (props: {
                   height={renderHeight}
                   ref={props.canvasRef}
                   style={{
-                    objectFit: "contain",
+                    objectFit: "cover",
                     pointerEvents: "none",
                     position: "absolute",
+
                     width: viewWidth,
                     height: viewHeight,
                     zIndex: 10,
