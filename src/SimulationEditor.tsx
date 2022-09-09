@@ -1,24 +1,43 @@
-import { TabList, TabPanel } from "@mui/lab";
-import TabContext from "@mui/lab/TabContext";
 import {
-  Box,
-  Button,
   Card,
   Drawer,
   MenuItem,
   Select,
   Switch,
-  Tab,
   Typography,
 } from "@mui/material";
 import { Stack } from "@mui/system";
-import { useEffect, useState } from "react";
-import "react-splitter-layout/lib/index.css";
+import { useState } from "react";
 import { CodeEditor } from "./components/CodeEditor";
 import { ParticleStateTable } from "./components/ParticleStateTable";
 import { defaultExample } from "./examples/default";
 import { templateExample } from "./examples/template";
 import { balancedMatch } from "./Simulation";
+
+const key = "webgl-particles-code";
+
+let initialConfig = defaultExample;
+if (localStorage.getItem(key)) {
+  try {
+    const str = localStorage.getItem(key);
+    if (typeof str == "string") {
+      initialConfig = str;
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+export const useSimulationCode = () => {
+  const [code, setCode] = useState(initialConfig);
+
+  const saveCode = (newCode: Partial<string>) => {
+    setCode(newCode);
+    localStorage.setItem(key, newCode);
+  };
+
+  return [code, saveCode] as const;
+};
 
 const presets = {
   default: defaultExample,

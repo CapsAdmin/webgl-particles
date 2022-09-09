@@ -1,7 +1,6 @@
-import { FramebufferInfo } from "twgl.js";
-import { mouseEvents, renderLoop } from "./other/Events";
-import { createParticleSimulation } from "./Simulation";
+import { renderLoop } from "./other/Events";
 import { createProgramInfo, glsl, twgl } from "./other/WebGL";
+import { createParticleSimulation } from "./Simulation";
 
 export const createParticleSimulationRenderer = (
     gl: WebGL2RenderingContext,

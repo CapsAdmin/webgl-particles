@@ -1,9 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-
 import { createTheme, CssBaseline, ThemeProvider } from "@mui/material";
-import "react-splitter-layout/lib/index.css";
 import "./global.css";
 
 const darkTheme = createTheme({

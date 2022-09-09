@@ -1,4 +1,3 @@
-import chroma from "chroma-js";
 import { AttachmentOptions, FramebufferInfo } from "twgl.js";
 import { createProgramInfo, glsl, twgl } from "./other/WebGL";
 

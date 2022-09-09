@@ -1,14 +1,11 @@
 import { Menu } from "@mui/icons-material";
 import { IconButton, Typography } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
-import "react-splitter-layout/lib/index.css";
 import { CanvasMap, MapView } from "./components/CanvasMap";
 import { GithubLink } from "./components/GithubLink";
-import "./global.css";
 import { createParticleSimulationRenderer } from "./Renderer";
 import { createParticleSimulation } from "./Simulation";
-import { ConifgEditor } from "./SimulationEditor";
-import { useSimulationCode } from "./useSimulationConfig";
+import { ConifgEditor, useSimulationCode } from "./SimulationEditor";
 
 function App() {
   const [code, setCode] = useSimulationCode();

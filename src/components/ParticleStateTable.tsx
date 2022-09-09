@@ -1,19 +1,11 @@
-import Editor from "@monaco-editor/react";
 import {
-  Box,
-  Card,
-  Container,
-  createTheme,
-  CssBaseline,
   Paper,
-  Switch,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  ThemeProvider,
   Tooltip,
   Typography,
 } from "@mui/material";

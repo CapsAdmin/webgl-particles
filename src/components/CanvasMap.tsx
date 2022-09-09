@@ -1,12 +1,12 @@
 import { Add, GpsFixed, Remove } from "@mui/icons-material";
-import { ButtonGroup, IconButton, Stack, Typography } from "@mui/material";
-import { RefObject, useEffect, useRef, useState } from "react";
+import { IconButton, Stack } from "@mui/material";
+import { RefObject, useRef, useState } from "react";
+import ReactResizeDetector from "react-resize-detector";
 import {
   ReactZoomPanPinchRef,
   TransformComponent,
   TransformWrapper,
 } from "react-zoom-pan-pinch";
-import ReactResizeDetector from "react-resize-detector";
 
 export type MapView = { get: () => readonly [number, number, number, number] };
 
