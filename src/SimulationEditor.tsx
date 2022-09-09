@@ -121,7 +121,10 @@ export const ConifgEditor = (props: {
   return (
     <>
       <Drawer anchor={"left"} open={props.show} onClose={props.onClose}>
-        <Card variant="outlined" style={{ flex: 1, minWidth: "40vw" }}>
+        <Card
+          variant="outlined"
+          style={{ flex: 1, minWidth: "calc(max(40vw, 380px))" }}
+        >
           <Stack spacing={1}>
             <Select defaultValue={preset} label="presets">
               {Object.entries(presets).map(([key, value]) => (
