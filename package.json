@@ -7,6 +7,7 @@
     "@emotion/react": "^11.10.4",
     "@emotion/styled": "^11.10.4",
     "@monaco-editor/react": "^4.4.5",
+    "@msgpack/msgpack": "^2.8.0",
     "@mui/icons-material": "^5.10.3",
     "@mui/lab": "^5.0.0-alpha.97",
     "@mui/material": "^5.10.3",
@@ -20,6 +21,7 @@
     "@types/react-dom": "^18.0.6",
     "@types/react-splitter-layout": "^3.0.2",
     "chroma-js": "^2.4.2",
+    "fflate": "^0.7.3",
     "gh-pages": "^4.0.0",
     "gpu.js": "^2.15.2",
     "monaco-editor": "^0.34.0",
@@ -61,6 +63,7 @@
     ]
   },
   "devDependencies": {
+    "raw-loader": "^4.0.2",
     "react-app-rewired": "^2.2.1"
   },
   "overrides": {

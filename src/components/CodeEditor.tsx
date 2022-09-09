@@ -49,7 +49,7 @@ export const CodeEditor = (props: {
     >
       <div
         style={{
-          margin: -12,
+          marginLeft: -12,
           height: "calc(100% + 24px)",
           display: "flex",
         }}

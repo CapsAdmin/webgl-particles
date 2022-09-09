@@ -5,15 +5,19 @@ import "react-splitter-layout/lib/index.css";
 import { CanvasMap, MapView } from "./components/CanvasMap";
 import { GithubLink } from "./components/GithubLink";
 import "./global.css";
-import { ConifgEditor } from "./SimulationEditor";
 import { createParticleSimulationRenderer } from "./Renderer";
 import { createParticleSimulation } from "./Simulation";
-import { useSimulationConfig } from "./useSimulationConfig";
+import { ConifgEditor } from "./SimulationEditor";
+import { useSimulationCode } from "./useSimulationConfig";
 
 function App() {
-  const [config, setConfig] = useSimulationConfig();
+  const [code, setCode] = useSimulationCode();
   let [error, setError] = useState("");
   const [showEditor, setShowEditor] = useState(false);
+  const [particleStateFunction, setParticleStateFunction] =
+    useState<(i: number, state: Float32Array[]) => void>();
+  const [worldScale, setWorldScale] = useState(15);
+  const [particleCount, setParticleCount] = useState(1);
 
   const shaderError = error.includes("SHADER: ERROR") ? error : undefined;
   if (shaderError) {
@@ -30,10 +34,17 @@ function App() {
     if (!gl) return;
 
     try {
-      let particleSimulation = createParticleSimulation(gl, config);
+      let particleSimulation = createParticleSimulation(
+        gl,
+        code,
+        particleStateFunction
+      );
 
-      if (config.particleCount > 30) {
-        config.onParticleState = undefined;
+      setWorldScale(particleSimulation.jsonConfig.worldScale);
+      setParticleCount(particleSimulation.jsonConfig.particleCount);
+
+      if (particleSimulation.compute.count > 30) {
+        setParticleStateFunction(undefined);
       }
 
       let destroy = createParticleSimulationRenderer(
@@ -55,7 +66,7 @@ function App() {
         setError(err.message);
       }
     }
-  }, [config]);
+  }, [code]);
 
   return (
     <>
@@ -70,7 +81,7 @@ function App() {
       >
         <CanvasMap
           viewSize={window.innerWidth}
-          worldScale={config.worldScale}
+          worldScale={worldScale}
           viewRef={viewRef}
           canvasRef={canvasRef}
         />
@@ -102,11 +113,13 @@ function App() {
       ) : null}
 
       <ConifgEditor
-        config={config}
-        updateConfig={setConfig}
+        code={code}
+        setCode={setCode}
         onClose={() => setShowEditor(false)}
         show={showEditor}
         shaderError={shaderError}
+        particleCount={particleCount}
+        setParticleStateFunction={setParticleStateFunction}
       />
 
       <div
@@ -119,15 +132,17 @@ function App() {
         <GithubLink url="https://github.com/CapsAdmin/webgl-particles" />
       </div>
 
-      <div style={{ position: "fixed", top: 10, right: 10 }}>
-        <IconButton
-          onClick={() => {
-            setShowEditor(!showEditor);
-          }}
-        >
-          <Menu></Menu>
-        </IconButton>
-      </div>
+      {!showEditor ? (
+        <div style={{ position: "fixed", top: 10, left: 10 }}>
+          <IconButton
+            onClick={() => {
+              setShowEditor(!showEditor);
+            }}
+          >
+            <Menu></Menu>
+          </IconButton>
+        </div>
+      ) : null}
     </>
   );
 }

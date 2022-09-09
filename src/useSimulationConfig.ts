@@ -1,26 +1,55 @@
-import { useCallback, useState } from "react";
-import { defaultConfig, SimulationConfig } from "./Simulation";
+import * as fflate from 'fflate';
+import { useState } from "react";
+import { defaultExample } from "./examples/default";
 
-let initialConfig = defaultConfig;
+let initialConfig = defaultExample;
 if (localStorage.getItem("config")) {
     try {
         const str = localStorage.getItem("config");
         if (!str) throw new Error("no config");
-        const test = JSON.parse(str);
-        if (test) {
-            initialConfig = test;
+        if (typeof str == "string") {
+            initialConfig = str;
         }
     } catch (err) {
         console.error(err);
     }
 }
 
-export const useSimulationConfig = () => {
+function str2ab(str: string) {
+    const bufView = new Uint8Array(str.length);
+    for (let i = 0; i < str.length; i++) {
+        bufView[i] = str.charCodeAt(i);
+    }
+    return bufView;
+}
+
+function ab2str(uarr: Uint8Array): string {
+    let str = '';
+    for (let i = 0; i < uarr.length; i++) {
+        str += String.fromCharCode(uarr[i]);
+    }
+
+    return str;
+}
+
+export const encodeConfig = (data: string) => {
+    const msgpackEncoded = str2ab(data)
+    const deflated = fflate.deflateSync(msgpackEncoded, { level: 9, mem: 12 })
+    const uri = ab2str(deflated)
+    return uri
+}
+export const decodeConfig = (deflated: string) => {
+    const msgpackEncoded = fflate.inflateSync(str2ab(deflated))
+    const data = ab2str(msgpackEncoded)
+    return data
+}
+
+export const useSimulationCode = () => {
     const search = window.location.search;
-    const urlConfig = new URLSearchParams(search).get("config");
-    if (urlConfig) {
+    const urlCode = new URLSearchParams(search).get("c");
+    if (urlCode) {
         try {
-            const test = JSON.parse(decodeURIComponent(atob(urlConfig)));
+            const test = decodeConfig(atob(urlCode));
             if (test) {
                 initialConfig = test;
             }
@@ -29,14 +58,12 @@ export const useSimulationConfig = () => {
         }
     }
 
-    const [config, setConfig] = useState(initialConfig);
+    const [code, setCode] = useState(initialConfig);
 
-    const updateConfig = (newConfig: Partial<SimulationConfig>) => {
-        const temp = { ...config, ...newConfig };
-        setConfig(temp);
-        const str = JSON.stringify(temp);
-        localStorage.setItem("config", str);
+    const saveCode = (newCode: Partial<string>) => {
+        setCode(newCode);
+        localStorage.setItem("config", newCode);
     }
 
-    return [config, updateConfig] as const
+    return [code, saveCode] as const
 }

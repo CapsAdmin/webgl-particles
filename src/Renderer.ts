@@ -21,7 +21,7 @@ export const createParticleSimulationRenderer = (
     ${particleSimulation.compute.vertexShaderHeader}
     
     void main() {
-        int index = gl_VertexID / 6;
+        int index = (gl_VertexID / 6) + 1;
         int y = index % textureSize;
         int x = index / textureSize;
 

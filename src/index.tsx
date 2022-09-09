@@ -27,6 +27,16 @@ const darkTheme = createTheme({
         },
       },
     },
+    MuiMenu: {
+      styleOverrides: {
+        paper: {
+          marginLeft: -12,
+        },
+        list: {
+          backgroundColor: "rgba(0,0,0,1)",
+        },
+      },
+    },
   },
 });
 

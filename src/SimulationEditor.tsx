@@ -4,68 +4,40 @@ import {
   Box,
   Button,
   Card,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
   Drawer,
-  Slider,
+  MenuItem,
+  Select,
   Switch,
   Tab,
-  TextField,
   Typography,
 } from "@mui/material";
 import { Stack } from "@mui/system";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "react-splitter-layout/lib/index.css";
 import { CodeEditor } from "./components/CodeEditor";
-import { ExponentialSlider } from "./components/ExponentialSlider";
 import { ParticleStateTable } from "./components/ParticleStateTable";
-import { balancedMatch, defaultConfig, SimulationConfig } from "./Simulation";
+import { defaultExample } from "./examples/default";
+import { templateExample } from "./examples/template";
+import { balancedMatch } from "./Simulation";
 
-let initialConfig = defaultConfig;
-if (localStorage.getItem("config")) {
-  try {
-    const str = localStorage.getItem("config");
-    if (!str) throw new Error("no config");
-    const test = JSON.parse(str);
-    if (test) {
-      initialConfig = test;
-    }
-  } catch (err) {
-    console.error(err);
-  }
-}
+const presets = {
+  default: defaultExample,
+  template: templateExample,
+};
 
 export const ConifgEditor = (props: {
   onClose: () => void;
   show: boolean;
-  config: SimulationConfig;
-  updateConfig: (config: Partial<SimulationConfig>) => void;
+  code: string;
+  setCode: (code: string) => void;
   shaderError?: string;
+  particleCount: number;
+  setParticleStateFunction: (
+    f?: (i: number, state: Float32Array[]) => void
+  ) => void;
 }) => {
-  const config = props.config;
-  const updateConfig = props.updateConfig;
-  const search = window.location.search;
-  const urlConfig = new URLSearchParams(search).get("config");
-  if (urlConfig) {
-    try {
-      const test = JSON.parse(decodeURIComponent(atob(urlConfig)));
-      if (test) {
-        initialConfig = test;
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
   const [particleState, setParticleState] = useState<number[][][]>([]);
-
-  const [tab, setTab] = useState("1");
-  const [showResetDialog, setShowResetDialog] = useState(false);
-  const [showPasteDialog, setShowPasteDialog] = useState(false);
-  const [pasteText, setPasteText] = useState("");
+  const [preset, setPreset] = useState("default");
 
   let shaderErrors = [];
   if (props.shaderError) {
@@ -81,12 +53,9 @@ export const ConifgEditor = (props: {
     }
 
     {
-      const [start, stop] = balancedMatch(props.config.shaderCode, type);
-      const otherCodeStart = props.config.shaderCode.substring(0, start);
-      const otherCodeStop = props.config.shaderCode.substring(
-        stop,
-        props.config.shaderCode.length
-      );
+      const [start, stop] = balancedMatch(props.code, type);
+      const otherCodeStart = props.code.substring(0, start);
+      const otherCodeStop = props.code.substring(stop, props.code.length);
 
       for (const line of (otherCodeStart + otherCodeStop).split("\n")) {
         if (line.includes(type)) {
@@ -132,219 +101,60 @@ export const ConifgEditor = (props: {
 
   return (
     <>
-      <Drawer anchor={"right"} open={props.show} onClose={props.onClose}>
+      <Drawer anchor={"left"} open={props.show} onClose={props.onClose}>
         <Card variant="outlined" style={{ flex: 1, minWidth: "40vw" }}>
-          <TabContext value={tab}>
-            <Box
-              sx={{
-                borderBottom: 1,
-                borderColor: "divider",
-              }}
-            >
-              <TabList
-                textColor="primary"
-                indicatorColor="primary"
-                onChange={(e, v) => {
-                  setTab(v);
-                }}
-              >
-                <Tab color="red" label="simulation" value="simulation" />
-                <Tab color="red" label="settings" value="settings" />
-                {config.particleCount < 30 ? (
-                  <Tab color="red" label="state" value="state" />
-                ) : null}
-              </TabList>
-            </Box>
+          <Stack spacing={1}>
+            <Select defaultValue={preset} label="presets">
+              {Object.entries(presets).map(([key, value]) => (
+                <MenuItem
+                  onClick={() => {
+                    setPreset(key);
+                    props.setCode(value);
+                  }}
+                  key={key}
+                  value={key}
+                >
+                  {key}
+                </MenuItem>
+              ))}
+            </Select>
 
-            <TabPanel value="simulation" style={{ height: "100%" }}>
+            <div style={{ height: "100vh" }}>
               <CodeEditor
                 errors={shaderErrors}
                 language="glsl"
-                code={config.shaderCode}
+                code={props.code || ""}
                 onChange={(code) => {
-                  updateConfig({ shaderCode: code });
+                  props.setCode(code);
                 }}
               />
-            </TabPanel>
+            </div>
 
-            <TabPanel value="settings" style={{ display: "flex" }}>
-              <Stack padding={3} spacing={2} style={{ flex: 1 }}>
-                <Box>
-                  <Typography variant="body1">particle count</Typography>
-                  <ExponentialSlider
-                    steps={[
-                      { value: 1, label: "1" },
-                      { value: 2, label: "2" },
-                      { value: 3, label: "3" },
-                      { value: 4, label: "4" },
-                      { value: 8, label: "8" },
-                      { value: 32, label: "32" },
-                      { value: 1000, label: "1k" },
-                      { value: 10000, label: "10k" },
-                      { value: 20000, label: "20k" },
-                      { value: 30000, label: "30k" },
-                      { value: 50000, label: "50k" },
-                      { value: 100000, label: "100k" },
-                      { value: 1000000, label: "1m" },
-                    ]}
-                    value={config.particleCount}
-                    onChange={(num) => {
-                      updateConfig({
-                        particleCount: Math.round(num),
-                      });
+            {props.particleCount < 30 ? (
+              <Card>
+                <Stack direction={"row"} alignItems="center">
+                  <Switch
+                    onChange={(e, checked) => {
+                      if (checked) {
+                        props.setParticleStateFunction((i, state) => {
+                          (particleState as any)[i] = state;
+                          setParticleState([...particleState]);
+                        });
+                      } else {
+                        props.setParticleStateFunction(undefined);
+                      }
                     }}
                   />
-                </Box>
 
-                <Box>
-                  <Typography variant="body1">world scale</Typography>
-                  <Slider
-                    min={1}
-                    max={50}
-                    valueLabelDisplay="auto"
-                    value={config.worldScale}
-                    onChange={(e, num) => {
-                      updateConfig({
-                        worldScale: Math.round(num as number),
-                      });
-                    }}
-                  />
-                </Box>
+                  <Typography>read paritcle state</Typography>
+                </Stack>
 
-                <Button
-                  onClick={() => {
-                    const base64 = btoa(JSON.stringify(config, null, 2));
-
-                    navigator.clipboard.writeText(
-                      window.location.origin +
-                        window.location.pathname +
-                        "?config=" +
-                        encodeURIComponent(base64)
-                    );
-                  }}
-                  variant="contained"
-                >
-                  copy unique url to clipboard
-                </Button>
-
-                <Button
-                  onClick={() => {
-                    navigator.clipboard.writeText(
-                      JSON.stringify(config, null, 2)
-                    );
-                  }}
-                  variant="text"
-                >
-                  copy settings to clipboard
-                </Button>
-
-                <Button
-                  onClick={async () => {
-                    setShowPasteDialog(true);
-                  }}
-                  variant="text"
-                >
-                  paste settings from clipboard
-                </Button>
-
-                <Button
-                  onClick={() => {
-                    setShowResetDialog(true);
-                  }}
-                  variant="text"
-                >
-                  reset settings
-                </Button>
-              </Stack>
-            </TabPanel>
-
-            <TabPanel value="state" style={{ display: "flex" }}>
-              {config.particleCount < 30 ? (
-                <Card>
-                  <Stack direction={"row"} alignItems="center">
-                    <Switch
-                      onChange={(e, checked) => {
-                        if (checked) {
-                          updateConfig({
-                            onParticleState: (i, state) => {
-                              (particleState as any)[i] = state;
-                              setParticleState([...particleState]);
-                            },
-                          });
-                        } else {
-                          updateConfig({
-                            onParticleState: undefined,
-                          });
-                        }
-                      }}
-                    />
-
-                    <Typography>read paritcle state</Typography>
-                  </Stack>
-
-                  <ParticleStateTable particleState={particleState} />
-                </Card>
-              ) : null}
-            </TabPanel>
-          </TabContext>
+                <ParticleStateTable particleState={particleState} />
+              </Card>
+            ) : null}
+          </Stack>
         </Card>
       </Drawer>
-
-      <Dialog open={showResetDialog} onClose={() => setShowResetDialog(false)}>
-        <DialogTitle>reset settings</DialogTitle>
-        <DialogContent>
-          <DialogContentText id="alert-dialog-description">
-            do you want to reset your settings?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowResetDialog(false)}>cancel</Button>
-          <Button
-            onClick={() => {
-              updateConfig({ ...defaultConfig });
-              setShowResetDialog(false);
-            }}
-            autoFocus
-          >
-            reset
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={showPasteDialog} onClose={() => setShowPasteDialog(false)}>
-        <DialogTitle>load settings</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            paste json settings from clipboard
-          </DialogContentText>
-
-          <TextField
-            autoFocus
-            style={{ maxHeight: 200 }}
-            onChange={(e) => {
-              setPasteText(e.target.value);
-            }}
-            fullWidth
-            multiline
-          ></TextField>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowPasteDialog(false)}>cancel</Button>
-          <Button
-            onClick={() => {
-              const data = JSON.parse(pasteText);
-              if (data) {
-                updateConfig(data);
-              }
-              setShowPasteDialog(false);
-              setPasteText("");
-            }}
-            autoFocus
-          >
-            load
-          </Button>
-        </DialogActions>
-      </Dialog>
     </>
   );
 };
