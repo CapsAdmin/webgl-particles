@@ -50,7 +50,7 @@ function App() {
         () => {
           let view = viewRef.current;
           if (!view) return [0, 0, 1, 1] as const;
-          return view.get();
+          return view;
         }
       );
       setError("");
