@@ -55,7 +55,6 @@ export const ConifgEditor = (props: {
     f?: (i: number, state: Float32Array[]) => void
   ) => void;
 }) => {
-  const [particleState, setParticleState] = useState<number[][][]>([]);
   const [preset, setPreset] = useState("default");
 
   let shaderErrors = [];
@@ -123,9 +122,13 @@ export const ConifgEditor = (props: {
       <Drawer anchor={"left"} open={props.show} onClose={props.onClose}>
         <Card
           variant="outlined"
-          style={{ flex: 1, minWidth: "calc(max(40vw, 380px))" }}
+          style={{
+            flex: 1,
+            display: "flex",
+            width: "calc(min(100vw - 40px, 800px))",
+          }}
         >
-          <Stack spacing={1}>
+          <Stack flex={1} spacing={1}>
             <Select defaultValue={preset} label="presets">
               {Object.entries(presets).map(([key, value]) => (
                 <MenuItem
@@ -141,7 +144,7 @@ export const ConifgEditor = (props: {
               ))}
             </Select>
 
-            <div style={{ height: "100vh" }}>
+            <div style={{ height: "100%" }}>
               <CodeEditor
                 errors={shaderErrors}
                 language="glsl"
@@ -151,29 +154,6 @@ export const ConifgEditor = (props: {
                 }}
               />
             </div>
-
-            {props.particleCount < 30 ? (
-              <Card>
-                <Stack direction={"row"} alignItems="center">
-                  <Switch
-                    onChange={(e, checked) => {
-                      if (checked) {
-                        props.setParticleStateFunction((i, state) => {
-                          (particleState as any)[i] = state;
-                          setParticleState([...particleState]);
-                        });
-                      } else {
-                        props.setParticleStateFunction(undefined);
-                      }
-                    }}
-                  />
-
-                  <Typography>read paritcle state</Typography>
-                </Stack>
-
-                <ParticleStateTable particleState={particleState} />
-              </Card>
-            ) : null}
           </Stack>
         </Card>
       </Drawer>

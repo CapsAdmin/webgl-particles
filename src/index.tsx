@@ -15,7 +15,7 @@ const darkTheme = createTheme({
   typography: {
     fontFamily: "Monospace",
   },
-  spacing: 4,
+  spacing: 1,
   components: {
     MuiPaper: {
       styleOverrides: {

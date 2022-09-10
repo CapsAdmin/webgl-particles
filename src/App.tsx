@@ -66,14 +66,23 @@ function App() {
   }, [code]);
 
   return (
-    <>
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        height: "100%",
+        width: "100%",
+        display: "flex",
+      }}
+    >
       <div
         style={{
           position: "absolute",
           top: 0,
           left: 0,
-          width: "100vw",
-          height: "100vh",
+          width: "100%",
+          height: "100%",
         }}
       >
         <CanvasMap
@@ -121,7 +130,7 @@ function App() {
 
       <div
         style={{
-          position: "fixed",
+          position: "absolute",
           bottom: 1,
           right: 1,
         }}
@@ -130,7 +139,7 @@ function App() {
       </div>
 
       {!showEditor ? (
-        <div style={{ position: "fixed", top: 10, left: 10 }}>
+        <div style={{ position: "absolute", top: 10, left: 10 }}>
           <IconButton
             onClick={() => {
               setShowEditor(!showEditor);
@@ -140,7 +149,7 @@ function App() {
           </IconButton>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }
 

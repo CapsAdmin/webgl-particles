@@ -1,3 +1,17 @@
 .MuiBackdrop-root {
     opacity: 0 !important;
 }
+
+/* adjust the monaco editor folding thing to be center */
+.cldr {
+    transform: translateX(-2px);
+}
+
+.current-line {
+    border: none !important;
+    background-color: rgba(77, 184, 152, 0.1) !important;
+}
+
+.scrollbar.horizontal {
+    height: 8px !important;
+}

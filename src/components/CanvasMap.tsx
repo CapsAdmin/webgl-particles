@@ -46,14 +46,14 @@ export const CanvasMap = (props: {
           x = width * 0.5 * (-(height / width) + 1);
         }
 
-        panRef.current?.setTransform(x, y, panRef.current?.state.scale, 0);
+        pan.setTransform(x, y, pan.state.scale, 0);
       }}
     >
       <div
         style={{
           position: "relative",
           flex: 1,
-          height: "100vh",
+          height: "100%",
         }}
       >
         <TransformWrapper

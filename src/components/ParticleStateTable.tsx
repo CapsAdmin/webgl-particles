@@ -25,7 +25,7 @@ const formatProperty = (value: number) => {
 export const ParticleStateTable = (props: { particleState: number[][][] }) => {
   return (
     <TableContainer component={Paper}>
-      <Table sx={{ minWidth: 650 }} size="small" aria-label="a dense table">
+      <Table size="small" aria-label="a dense table">
         <TableHead>
           <TableRow>
             <TableCell>pos</TableCell>

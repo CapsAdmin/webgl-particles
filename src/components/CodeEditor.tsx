@@ -352,20 +352,27 @@ export const CodeEditor = (props: {
     >
       <div
         style={{
-          height: "calc(100% + 24px)",
+          height: "100%",
+          flex: 1,
           display: "flex",
         }}
       >
         <Editor
+          height={"100%"}
           options={{
             minimap: {
               enabled: false,
             },
             glyphMargin: false,
             folding: true,
-            lineNumbers: "on",
+            lineNumbers: "off",
             lineDecorationsWidth: 0,
-            lineNumbersMinChars: 3,
+            lineNumbersMinChars: 0,
+
+            scrollbar: {
+              verticalScrollbarSize: 2,
+              horizontalSliderSize: 2,
+            },
           }}
           beforeMount={(monaco) => {
             monaco.editor.defineTheme("myCustomTheme", {
@@ -374,6 +381,7 @@ export const CodeEditor = (props: {
               colors: {
                 "editor.background": "#ff000000",
               },
+
               rules: [],
             });
           }}
