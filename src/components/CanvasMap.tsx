@@ -33,6 +33,7 @@ export const CanvasMap = (props: {
   const renderSize = Math.max(viewWidth, viewHeight);
   const renderWidth = Math.min(renderSize, 1024);
   const renderHeight = Math.min(renderSize, 1024);
+  const initScale = viewWidth / worldWidth;
 
   useEffect(() => {
     const stop = renderLoop(() => {
@@ -71,6 +72,23 @@ export const CanvasMap = (props: {
     return stop;
   }, [viewWidth, viewHeight]);
 
+  const center = useCallback(
+    (time = 0) => {
+      const pan = panRef.current;
+      if (!pan) return;
+
+      if (viewWidth < viewHeight) {
+        let x = -(viewHeight / viewWidth) + 1;
+        pan.setTransform((-viewWidth / 2) * -x, 0, initScale, time);
+      } else {
+        let y = -(viewWidth / viewHeight) + 1;
+
+        pan.setTransform(0, (-viewHeight / 2) * -y, initScale, time);
+      }
+    },
+    [viewWidth, viewHeight]
+  );
+
   return (
     <ReactResizeDetector
       handleWidth
@@ -78,20 +96,9 @@ export const CanvasMap = (props: {
       onResize={(width, height) => {
         width = width || 700;
         height = height || 700;
-        const pan = panRef.current!;
         setViewWidth(width);
         setViewHeight(height);
-
-        let x = 0;
-        let y = 0;
-
-        if (width > height) {
-          y = height * 0.5 * (-(width / height) + 1);
-        } else {
-          x = width * 0.5 * (-(height / width) + 1);
-        }
-
-        pan.setTransform(x, y, pan.state.scale, 0);
+        center(0);
       }}
     >
       <div
@@ -104,7 +111,7 @@ export const CanvasMap = (props: {
         <TransformWrapper
           initialPositionX={viewWidth / 2}
           initialPositionY={viewHeight / 2}
-          initialScale={viewWidth / worldWidth}
+          initialScale={initScale}
           minScale={0.01}
           maxScale={7}
           ref={panRef}
@@ -123,24 +130,7 @@ export const CanvasMap = (props: {
                 <IconButton
                   size="small"
                   onClick={() => {
-                    let x = 0;
-                    let y = 0;
-
-                    let width = viewWidth;
-                    let height = viewHeight;
-
-                    if (width > height) {
-                      y = height * 0.5 * (-(width / height) + 1);
-                    } else {
-                      x = width * 0.5 * (-(height / width) + 1);
-                    }
-
-                    panRef.current?.setTransform(
-                      x,
-                      y,
-                      viewWidth / worldWidth,
-                      1000
-                    );
+                    center(1000);
                   }}
                 >
                   <GpsFixed />
