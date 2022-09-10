@@ -109,9 +109,6 @@ export const CanvasMap = (props: {
         }}
       >
         <TransformWrapper
-          initialPositionX={viewWidth / 2}
-          initialPositionY={viewHeight / 2}
-          initialScale={initScale}
           minScale={0.01}
           maxScale={7}
           ref={panRef}
