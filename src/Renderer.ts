@@ -12,24 +12,34 @@ export const createParticleSimulationRenderer = (
     }
     const VERTEX = glsl`
     
-    in vec2 pos;
+    in uint index;
     
     uniform vec4 view;
-    uniform int textureSize;
+    uniform uint textureSize;
 
     ${particleSimulation.compute.vertexShaderHeader}
-    
+
+    const vec2 quad[3] = vec2[3](
+        vec2(-1, -1),
+        vec2(1, -1),
+        vec2(-1, 1)
+        
+    );
+
     void main() {
-        int index = (gl_VertexID / 6) + 1;
-        int y = index % textureSize;
-        int x = index / textureSize;
+
+
+        vec2 pos = quad[gl_VertexID];
+
+        uint y = uint(gl_InstanceID) % textureSize;
+        uint x = uint(gl_InstanceID) / textureSize;
 
         dataTexture0Out = texelFetch(dataTexture0, ivec2(y, x), 0);
         dataTexture1Out = texelFetch(dataTexture1, ivec2(y, x), 0);
         dataTexture2Out = texelFetch(dataTexture2, ivec2(y, x), 0);
         
         float size = (dataTexture2Out.y/2.0 + 0.01) * view.z;
-        gl_Position = vec4((((pos) * size) + (dataTexture0Out.xy * view.z) + view.xy), 0, 1);
+        gl_Position = vec4((((pos*2.0+vec2(1.0, 1.0)) * size) + (dataTexture0Out.xy * view.z) + view.xy), 0, 1);
     }
     `;
 
@@ -56,29 +66,11 @@ export const createParticleSimulationRenderer = (
 
     const programInfo = createProgramInfo(gl, VERTEX, FRAGMENT);
 
-    const particleQuads = new Float32Array(particleSimulation.compute.count * 12);
-
-    for (let i = 0; i < particleSimulation.compute.count; i++) {
-        const idx = i * 12;
-
-        particleQuads[idx + 0] = -1.0;
-        particleQuads[idx + 1] = -1.0;
-        particleQuads[idx + 2] = 1.0;
-        particleQuads[idx + 3] = -1.0;
-        particleQuads[idx + 4] = -1.0;
-        particleQuads[idx + 5] = 1.0;
-        particleQuads[idx + 6] = -1.0;
-        particleQuads[idx + 7] = 1.0;
-        particleQuads[idx + 8] = 1.0;
-        particleQuads[idx + 9] = -1.0;
-        particleQuads[idx + 10] = 1.0;
-        particleQuads[idx + 11] = 1.0;
-    }
-
     const quadBuffer = twgl.createBufferInfoFromArrays(gl, {
-        pos: {
-            numComponents: 2,
-            data: particleQuads,
+        index: {
+            numComponents: 1,
+            data: new Uint32Array(3),
+            divisor: 1,
         },
     });
 
@@ -107,7 +99,7 @@ export const createParticleSimulationRenderer = (
         gl.enable(gl.BLEND);
         gl.blendEquation(gl.FUNC_ADD);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-        twgl.drawBufferInfo(gl, quadBuffer);
+        twgl.drawBufferInfo(gl, quadBuffer, gl.TRIANGLES, quadBuffer.numElements, 0, particleSimulation.compute.count);
         gl.disable(gl.BLEND);
     }
 
