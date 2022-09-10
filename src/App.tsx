@@ -22,7 +22,7 @@ function App() {
   }
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const viewRef = useRef<MapView>(null);
+  const viewRef = useRef<MapView>([0, 0, 1, 1]);
 
   useEffect(() => {
     const gl = canvasRef.current?.getContext("webgl2", {

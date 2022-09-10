@@ -69,7 +69,7 @@ export const CanvasMap = (props: {
       x = x + ((pan.state.positionX / worldWidth) * 2 - 1) * 0.01;
       y = y + ((pan.state.positionY / worldHeight) * 2 - 1 + 0.5) * 0.01;
 
-      props.viewRef.current = [x, y, scale, viewWidth / viewHeight] as const;
+      props.viewRef.current = [x, y, scale, viewWidth / viewHeight];
     });
     return stop;
   }, [viewWidth, viewHeight]);
