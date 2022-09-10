@@ -33,14 +33,13 @@ export const CanvasMap = (props: {
   const renderSize = Math.max(viewWidth, viewHeight);
   const renderWidth = Math.min(renderSize, 1024);
   const renderHeight = Math.min(renderSize, 1024);
-  const initScale = viewWidth / worldWidth;
+  const initScale = 1;
 
   useEffect(() => {
     const stop = renderLoop(() => {
       const pan = panRef.current;
       if (!pan) return;
-      const scale = pan.state.scale;
-
+      const scale = pan.state.scale * 0.07;
       let x = pan.state.positionX;
       let y = pan.state.positionY;
 
@@ -66,6 +65,9 @@ export const CanvasMap = (props: {
       y = y * scale;
 
       x = -x;
+
+      x = x + ((pan.state.positionX / worldWidth) * 2 - 1) * 0.01;
+      y = y + ((pan.state.positionY / worldHeight) * 2 - 1 + 0.5) * 0.01;
 
       props.viewRef.current = [x, y, scale, viewWidth / viewHeight] as const;
     });
@@ -109,8 +111,8 @@ export const CanvasMap = (props: {
         }}
       >
         <TransformWrapper
-          minScale={0.01}
-          maxScale={7}
+          minScale={0.25}
+          maxScale={100}
           ref={panRef}
           limitToBounds={false}
         >
