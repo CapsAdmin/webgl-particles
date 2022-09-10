@@ -108,8 +108,8 @@ RENDER {
   vec4 render(vec2 screenPos, vec2 viewPos, float zoom) {
     vec2 pos = viewPos + getPosition()* zoom;
     float size = (getSize()/2.0 + 0.01) * zoom;
-    float alpha = -length(pos - screenPos)*(1.0/size)+1.0;
-    alpha = pow(alpha, 0.8);
+    float alpha = max(-length(pos - screenPos)*(1.0/size)+1.0, 0.0);
+    alpha = pow(alpha, 0.5);
     return vec4(getColor().rgb, alpha);
   }
 }`
