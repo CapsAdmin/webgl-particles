@@ -11,6 +11,7 @@ import { useState } from "react";
 import { CodeEditor } from "./components/CodeEditor";
 import { ParticleStateTable } from "./components/ParticleStateTable";
 import { defaultExample } from "./examples/default";
+import { PseudoPhysics } from "./examples/pseduo-physics";
 import { templateExample } from "./examples/template";
 import { balancedMatch } from "./Simulation";
 
@@ -42,6 +43,7 @@ export const useSimulationCode = () => {
 const presets = {
   default: defaultExample,
   template: templateExample,
+  "pseudo physics": PseudoPhysics,
 };
 
 export const ConifgEditor = (props: {
