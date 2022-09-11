@@ -11,6 +11,8 @@ import { useState } from "react";
 import { CodeEditor } from "./components/CodeEditor";
 import { ParticleStateTable } from "./components/ParticleStateTable";
 import { defaultExample } from "./examples/default";
+import { hunar432ParticleLifeExample } from "./examples/hunar4321-particle-life";
+import { orbitsExample } from "./examples/orbits";
 import { PseudoPhysics } from "./examples/pseduo-physics";
 import { templateExample } from "./examples/template";
 import { balancedMatch } from "./Simulation";
@@ -44,6 +46,8 @@ const presets = {
   default: defaultExample,
   template: templateExample,
   "pseudo physics": PseudoPhysics,
+  orbits: orbitsExample,
+  "hunar432's particle-life": hunar432ParticleLifeExample,
 };
 
 export const ConifgEditor = (props: {

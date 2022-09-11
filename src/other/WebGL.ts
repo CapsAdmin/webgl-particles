@@ -24,6 +24,7 @@ function glslDefaultHeaders(str: string) {
 
   if (!str.includes("precision highp")) {
     header += "precision highp float;\n"
+    header += "precision highp int;\n"
   }
 
   return header + str
