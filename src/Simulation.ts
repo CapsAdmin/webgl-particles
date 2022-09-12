@@ -92,9 +92,7 @@ export const createParticleSimulation = (
         return fract(sin(sn) * c);
     }
 
-    //CUSTOM_COMPUTE_CODE_START
     ${computeCode}
-    
   `)
 
   return {

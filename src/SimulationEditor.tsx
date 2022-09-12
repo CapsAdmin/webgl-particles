@@ -63,61 +63,35 @@ export const ConifgEditor = (props: {
 }) => {
   const [preset, setPreset] = useState("default");
 
-  let shaderErrors = [];
+  let shaderErrors: Array<{ line: number; column: number; message: string }> =
+    [];
   if (props.shaderError) {
-    let startOffset = 0;
-    let type;
+    const errorLines = props.shaderError.split("\n");
+    const shaderLines = props.code.split("\n");
 
-    if (props.shaderError.includes("//CUSTOM_COMPUTE_CODE_START")) {
-      type = "COMPUTE";
-    } else if (props.shaderError.includes("//CUSTOM_RENDER_CODE_START")) {
-      type = "RENDER";
-    } else {
-      throw new Error("Unknown shader error");
-    }
+    for (let i = 0; i < errorLines.length; i++) {
+      const errorLine = errorLines[i];
 
-    {
-      const [start, stop] = balancedMatch(props.code, type);
-      const otherCodeStart = props.code.substring(0, start);
-      const otherCodeStop = props.code.substring(stop, props.code.length);
-
-      for (const line of (otherCodeStart + otherCodeStop).split("\n")) {
-        if (line.includes(type)) {
-          break;
-        }
-        startOffset--;
-      }
-    }
-
-    const lines = props.shaderError.split("\n");
-    for (const line of lines) {
-      if (line.includes("//CUSTOM_" + type + "_CODE_START")) {
-        break;
-      }
-      startOffset++;
-    }
-    const done = new Set<string>();
-    for (const line of lines) {
-      if (line.includes("ERROR: ")) {
-        const match = line.match(/ERROR: (\d+):(\d+):(.+)/);
-        if (match) {
-          const colNumber = parseInt(match[1], 10);
-          const lineNumber = parseInt(match[2], 10);
-          const message = match[3];
-          if (
-            colNumber >= 0 &&
-            lineNumber >= 0 &&
-            message &&
-            !done.has(message)
-          ) {
-            shaderErrors.push({
-              line: lineNumber - startOffset,
-              column: colNumber,
-              message,
-            });
-
-            done.add(message);
+      if (errorLine.includes("^^^ ERROR: ")) {
+        const message = errorLine.match(/ERROR: \d+:\d+: (.+)/)?.[1];
+        const lineAbove = errorLines[i - 2].match(/\d+: (.+)/)?.[1];
+        if (message && lineAbove) {
+          for (let j = 0; j < shaderLines.length; j++) {
+            const shaderLine = shaderLines[j];
+            if (shaderLine == lineAbove) {
+              shaderErrors.push({
+                line: j + 2,
+                column: 0,
+                message,
+              });
+            }
           }
+        } else {
+          shaderErrors.push({
+            line: 0,
+            column: shaderLines[0].length,
+            message: errorLine,
+          });
         }
       }
     }
