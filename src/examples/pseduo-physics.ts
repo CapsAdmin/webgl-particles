@@ -1,8 +1,10 @@
 import { glsl } from "../other/WebGL";
 
 export const PseudoPhysics = glsl`CONFIG {
-    "particleCount": 2242,
-    "worldScale": 15
+    return {
+        particleCount: 2242, 
+        worldScale: 15
+    }
 }
 
 COMPUTE {

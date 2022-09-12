@@ -3,8 +3,10 @@ import { glsl } from "../other/WebGL";
 export const orbitsExample = glsl`
 
 CONFIG {
-    "particleCount": 9,
-    "worldScale": 15
+    return {
+        particleCount: 9, 
+        worldScale: 15
+    }
 }
 
 COMPUTE {

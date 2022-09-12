@@ -35,9 +35,27 @@ export const createParticleSimulation = (
   onParticleState?: (i: number, state: Float32Array[]) => void,
 ) => {
 
+
+  const jsonConfig = eval("() => {\n" + code.substring(...balancedMatch(code, "CONFIG")) + "\n};")()
+  jsonConfig.particleCount = jsonConfig.particleCount || 1000;
+  jsonConfig.worldScale = jsonConfig.worldScale || 15;
+
+  if (jsonConfig.replacements) {
+    for (let key in jsonConfig.replacements) {
+      let pattern = new RegExp("\\/\\*\\#\\s*\\breplacements\\b\\.\\b" + key + "\\b\\s*\\#\\*\\/", "gm")
+      let match = pattern.exec(code)
+      if (match) {
+        let len = match[0].length
+        let start = match.index
+        let end = match.index + len
+
+        code = code.substring(0, start) + jsonConfig.replacements[key] + code.substring(end)
+      }
+    }
+  }
+
   const computeCode = code.substring(...balancedMatch(code, "COMPUTE"))
   const renderCode = code.substring(...balancedMatch(code, "RENDER"))
-  const jsonConfig = JSON.parse("{" + code.substring(...balancedMatch(code, "CONFIG")) + "}")
 
   const compute = createFragmentComputeShader(gl, jsonConfig.particleCount, glsl`
     uniform vec3 mouse;

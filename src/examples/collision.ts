@@ -1,8 +1,10 @@
 import { glsl } from "../other/WebGL";
 
 export const collisionExample = glsl`CONFIG {
-    "particleCount": 2,
-    "worldScale": 15
+    return {
+        particleCount: 2, 
+        worldScale: 15
+    }
 }
 
 COMPUTE {

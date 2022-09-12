@@ -1,8 +1,10 @@
 import { glsl } from "../other/WebGL"
 
 export const defaultExample = glsl`CONFIG {
-  "particleCount": 15000,
-  "worldScale": 15
+  return {
+    particleCount: 15000, 
+    worldScale: 15
+  }
 }
 
 COMPUTE {
