@@ -9,11 +9,11 @@ export const hunar432ParticleLifeExample = `
 
 CONFIG {
   const numberOfColors = 7
-  let seed = 51661218118857
+  let seed = 516612181188
   const atomsPerColor = 500
   // more settings in COMPUTE
 
-  const colors = [
+  let colors = [
       [1.0, 0.0, 0.0], // red
       [0.0, 1.0, 0.0], // green
       [0.0, 0.0, 1.0], // teal / blue
@@ -22,6 +22,9 @@ CONFIG {
       [1.0, 1.0, 0.0], // yellow
       [1.0, 1.0, 1.0], // lavender / white
   ]
+
+  // increase brightness a bit
+  colors = colors.map(color => color.map(c => Math.pow(c+0.25, 0.5)))
 
   colors.length = numberOfColors
 
@@ -45,10 +48,10 @@ CONFIG {
 
     replacements: {
       rulesCode: \`
-        const float[\${rules.length}] rules = float[\${rules.length}](\${rules.join(", ")});
+        const float[\${rules.length}] rules = float[\${rules.length}](\${rules.join(",\\n")});
 
         const vec3[\${colors.length}] colors = vec3[\${colors.length}](
-          \${colors.map(c => \`vec3(\${c.join(", ")})\`).join(", ")}
+          \${colors.map(c => \`vec3(\${c.join(", ")})\`).join(",\\n")}
         );
 
         // this is not very optimal, but I'm not sure how else to do it
@@ -100,6 +103,8 @@ COMPUTE {
     float friction = getFriction();
 
     for (int i = 0; i < particleCount; i++) {
+        if (i == index) continue;
+        
         vec2 otherPos = getPosition(i);
         vec4 otherColor = getColor(i);
        
@@ -107,7 +112,7 @@ COMPUTE {
         float dist = length(dir);
 
         // not sure if this is correct, I believe 80 is in pixel units
-        if (dist > 0.0 && dist <= sqrt(80.0/worldScale)) {
+        if (dist > 0.0 && dist <= 7.0) {
           vel += (getRule(color.rgb, otherColor.rgb) / dist) * dir;
         }
     }
