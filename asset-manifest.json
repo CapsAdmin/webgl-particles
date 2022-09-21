@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/webgl-particles/static/css/main.38f35e8a.css",
-    "main.js": "/webgl-particles/static/js/main.d59e6e6a.js",
+    "main.js": "/webgl-particles/static/js/main.f372df80.js",
     "editor.worker.js": "/webgl-particles/editor.worker.js",
     "static/media/codicon.ttf": "/webgl-particles/static/media/codicon.b797181c93b3755f4fa1.ttf",
     "index.html": "/webgl-particles/index.html",
     "main.38f35e8a.css.map": "/webgl-particles/static/css/main.38f35e8a.css.map",
-    "main.d59e6e6a.js.map": "/webgl-particles/static/js/main.d59e6e6a.js.map"
+    "main.f372df80.js.map": "/webgl-particles/static/js/main.f372df80.js.map"
   },
   "entrypoints": [
     "static/css/main.38f35e8a.css",
-    "static/js/main.d59e6e6a.js"
+    "static/js/main.f372df80.js"
   ]
 }
