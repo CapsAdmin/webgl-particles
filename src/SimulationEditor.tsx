@@ -9,17 +9,10 @@ import {
 import { Stack } from "@mui/system";
 import { useState } from "react";
 import { CodeEditor } from "./components/CodeEditor";
-import { ParticleStateTable } from "./components/ParticleStateTable";
-import { defaultExample } from "./examples/default";
-import { hunar432ParticleLifeExample } from "./examples/hunar4321-particle-life";
-import { orbitsExample } from "./examples/orbits";
-import { PseudoPhysics } from "./examples/pseduo-physics";
 import { templateExample } from "./examples/template";
-import { balancedMatch } from "./Simulation";
 
-const key = "webgl-particles-code";
-
-let initialConfig = defaultExample;
+const key = "webgl-simulation-code";
+let initialConfig = templateExample;
 if (localStorage.getItem(key)) {
   try {
     const str = localStorage.getItem(key);
@@ -43,11 +36,7 @@ export const useSimulationCode = () => {
 };
 
 const presets = {
-  default: defaultExample,
   template: templateExample,
-  "pseudo physics": PseudoPhysics,
-  orbits: orbitsExample,
-  "hunar432's particle-life": hunar432ParticleLifeExample,
 };
 
 export const ConifgEditor = (props: {
@@ -56,10 +45,6 @@ export const ConifgEditor = (props: {
   code: string;
   setCode: (code: string) => void;
   shaderError?: string;
-  particleCount: number;
-  setParticleStateFunction: (
-    f?: (i: number, state: Float32Array[]) => void
-  ) => void;
 }) => {
   const [preset, setPreset] = useState("default");
 

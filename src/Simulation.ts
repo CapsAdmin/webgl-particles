@@ -4,7 +4,6 @@ import { glsl } from "./other/WebGL";
 export const balancedMatch = (str: string, pre: string) => {
   for (let i = 0; i < str.length; i++) {
     if (str.substring(i, i + pre.length) === pre) {
-
       i += pre.length;
 
       while (str[i] === " " || str[i] === "\t") {
@@ -20,7 +19,7 @@ export const balancedMatch = (str: string, pre: string) => {
             depth--;
           }
           if (depth === 0) {
-            return [i + 1, j] as const
+            return [i + 1, j] as const;
           }
         }
       }
@@ -28,36 +27,40 @@ export const balancedMatch = (str: string, pre: string) => {
   }
 
   throw new Error("No matching code found for " + pre);
-}
-export const createParticleSimulation = (
-  gl: WebGL2RenderingContext,
-  code: string,
-  onParticleState?: (i: number, state: Float32Array[]) => void,
-) => {
-
-
-  const jsonConfig = eval("() => {\n" + code.substring(...balancedMatch(code, "CONFIG")) + "\n};")()
-  jsonConfig.particleCount = jsonConfig.particleCount || 1000;
+};
+export const createSimulation = (gl: WebGL2RenderingContext, code: string) => {
+  const jsonConfig = eval(
+    "() => {\n" + code.substring(...balancedMatch(code, "CONFIG")) + "\n};"
+  )();
   jsonConfig.worldScale = jsonConfig.worldScale || 15;
 
   if (jsonConfig.replacements) {
     for (let key in jsonConfig.replacements) {
-      let pattern = new RegExp("\\/\\*\\#\\s*\\breplacements\\b\\.\\b" + key + "\\b\\s*\\#\\*\\/", "gm")
-      let match = pattern.exec(code)
+      let pattern = new RegExp(
+        "\\/\\*\\#\\s*\\breplacements\\b\\.\\b" + key + "\\b\\s*\\#\\*\\/",
+        "gm"
+      );
+      let match = pattern.exec(code);
       if (match) {
-        let len = match[0].length
-        let start = match.index
-        let end = match.index + len
+        let len = match[0].length;
+        let start = match.index;
+        let end = match.index + len;
 
-        code = code.substring(0, start) + jsonConfig.replacements[key] + code.substring(end)
+        code =
+          code.substring(0, start) +
+          jsonConfig.replacements[key] +
+          code.substring(end);
       }
     }
   }
 
-  const computeCode = code.substring(...balancedMatch(code, "COMPUTE"))
-  const renderCode = code.substring(...balancedMatch(code, "RENDER"))
+  const computeCode = code.substring(...balancedMatch(code, "COMPUTE"));
+  const renderCode = code.substring(...balancedMatch(code, "RENDER"));
 
-  const compute = createFragmentComputeShader(gl, jsonConfig.particleCount, glsl`
+  const compute = createFragmentComputeShader(
+    gl,
+    512,
+    glsl`
     uniform vec3 mouse;
     uniform float time;
     uniform float worldScale;
@@ -93,7 +96,8 @@ export const createParticleSimulation = (
     }
 
     ${computeCode}
-  `)
+  `
+  );
 
   return {
     compute,
@@ -104,13 +108,7 @@ export const createParticleSimulation = (
         worldScale: jsonConfig.worldScale,
         time: Date.now() / 1000,
         deltaTime: dt,
-      })
-
-      if (onParticleState) {
-        for (let i = 0; i < jsonConfig.particleCount; i++) {
-          onParticleState(i, compute.getState(i));
-        }
-      }
+      });
     },
   };
 };

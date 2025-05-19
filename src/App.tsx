@@ -3,18 +3,16 @@ import { IconButton, Typography } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { CanvasMap, MapView } from "./components/CanvasMap";
 import { GithubLink } from "./components/GithubLink";
-import { createParticleSimulationRenderer } from "./Renderer";
-import { createParticleSimulation } from "./Simulation";
+import { createSimulationRenderer } from "./Renderer";
+import { createSimulation } from "./Simulation";
 import { ConifgEditor, useSimulationCode } from "./SimulationEditor";
 
 function App() {
   const [code, setCode] = useSimulationCode();
   let [error, setError] = useState("");
   const [showEditor, setShowEditor] = useState(false);
-  const [particleStateFunction, setParticleStateFunction] =
-    useState<(i: number, state: Float32Array[]) => void>();
+  useState<(i: number, state: Float32Array[]) => void>();
   const [worldScale, setWorldScale] = useState(15);
-  const [particleCount, setParticleCount] = useState(1);
 
   const shaderError = error.includes("SHADER: ERROR") ? error : undefined;
   if (shaderError) {
@@ -31,28 +29,15 @@ function App() {
     if (!gl) return;
 
     try {
-      let particleSimulation = createParticleSimulation(
-        gl,
-        code,
-        particleStateFunction
-      );
+      let simulation = createSimulation(gl, code);
 
-      setWorldScale(particleSimulation.jsonConfig.worldScale);
-      setParticleCount(particleSimulation.jsonConfig.particleCount);
+      setWorldScale(simulation.jsonConfig.worldScale);
 
-      if (particleSimulation.compute.count > 30) {
-        setParticleStateFunction(undefined);
-      }
-
-      let destroy = createParticleSimulationRenderer(
-        gl,
-        particleSimulation,
-        () => {
-          let view = viewRef.current;
-          if (!view) return [0, 0, 1, 1] as const;
-          return view;
-        }
-      );
+      let destroy = createSimulationRenderer(gl, simulation, () => {
+        let view = viewRef.current;
+        if (!view) return [0, 0, 1, 1] as const;
+        return view;
+      });
       setError("");
       return destroy;
     } catch (err: any) {
@@ -125,8 +110,6 @@ function App() {
         onClose={() => setShowEditor(false)}
         show={showEditor}
         shaderError={shaderError}
-        particleCount={particleCount}
-        setParticleStateFunction={setParticleStateFunction}
       />
 
       <div
@@ -136,7 +119,7 @@ function App() {
           right: 1,
         }}
       >
-        <GithubLink url="https://github.com/CapsAdmin/webgl-particles" />
+        <GithubLink url="https://github.com/CapsAdmin/webgl-siumulation" />
       </div>
 
       {!showEditor ? (
