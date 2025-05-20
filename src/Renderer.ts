@@ -44,24 +44,17 @@ export const createSimulationRenderer = (
 
   const programInfo = createProgramInfo(gl, VERTEX, FRAGMENT);
 
-
   const quadBuffer = twgl.createBufferInfoFromArrays(gl, {
-      position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
-    });
+    position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
+  });
 
   const renderSimulation = () => {
-    const texW = simulation.compute.textureSize[0]
-    const drawW = gl.drawingBufferWidth
-
-    const texH = simulation.compute.textureSize[1]
-    const drawH = gl.drawingBufferHeight
-
-    console.log(texW, texH)
+    const texW = simulation.compute.textureSize[0];
+    const texH = simulation.compute.textureSize[1];
 
     gl.viewport(0, 0, texW, texH);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.useProgram(programInfo.program);
-
 
     const dataTextures: Record<string, WebGLTexture> = {};
 
@@ -70,7 +63,7 @@ export const createSimulationRenderer = (
       dataTextures["dataTexture" + i] = texture;
       i++;
     }
-    
+
     twgl.setBuffersAndAttributes(gl, programInfo, quadBuffer);
     twgl.setUniforms(programInfo, {
       view: getView!(),

@@ -39,19 +39,9 @@ type StructureType = Record<
 export const createFragmentComputeShader = (
   gl: WebGL2RenderingContext,
   textureSize: [number, number],
+  ItemStructure: StructureType,
   shaderCode: string
 ) => {
-  const FLOAT = 0 as number;
-
-  const ItemStructure: StructureType = {
-    position: [FLOAT, FLOAT],
-    velocity: [FLOAT, FLOAT],
-    color: [FLOAT, FLOAT, FLOAT, FLOAT],
-    gravity: FLOAT,
-    size: FLOAT,
-    friction: FLOAT,
-  };
-
   let floatCount = 0;
   let sharedShaderCode = "";
   let writeShaderCode = "";
@@ -198,8 +188,8 @@ export const createFragmentComputeShader = (
 
   const program = createProgramInfo(gl, VERTEX, FRAGMENT);
   const quadBuffer = twgl.createBufferInfoFromArrays(gl, {
-      position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
-    });
+    position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
+  });
 
   let framebuffers: Array<FramebufferInfo> = [];
 

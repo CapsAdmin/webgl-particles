@@ -29,10 +29,20 @@ export const balancedMatch = (str: string, pre: string) => {
   throw new Error("No matching code found for " + pre);
 };
 export const createSimulation = (gl: WebGL2RenderingContext, code: string) => {
-  const jsonConfig = eval(
-    "() => {\n" + code.substring(...balancedMatch(code, "CONFIG")) + "\n};"
-  )();
+  let jsonConfig: any = null;
+  let src =
+    "() => {\n" + code.substring(...balancedMatch(code, "CONFIG")) + "\n};";
+  try {
+    jsonConfig = eval(src)();
+  } catch (e) {
+    console.error(src);
+    throw new Error("Error in simulation code");
+  }
   jsonConfig.worldScale = jsonConfig.worldScale || 15;
+
+  if (!jsonConfig.layout) {
+    throw new Error("No layout found in simulation code");
+  }
 
   if (jsonConfig.replacements) {
     for (let key in jsonConfig.replacements) {
@@ -60,6 +70,7 @@ export const createSimulation = (gl: WebGL2RenderingContext, code: string) => {
   const compute = createFragmentComputeShader(
     gl,
     [1024, 1024],
+    jsonConfig.layout,
     glsl`
     uniform vec3 mouse;
     uniform float time;

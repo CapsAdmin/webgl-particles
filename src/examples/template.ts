@@ -2,48 +2,32 @@ import { glsl } from "../other/WebGL";
 
 export const templateExample = glsl`CONFIG {
   return {
-    worldScale: 15
+    worldScale: 15,
+    layout: {
+      color: [0, 0, 0, 0],
+      lol: 0,
+    }
   }
 }
 
 COMPUTE {
   void init(vec2 fragPos) {
-    setPosition(vec2(0.75, 1.0));
-    setSize(0.5);
-
-    /*
-    setVelocity(vec2(0, 0));
-    setGravity(-0.005);
-    setFriction(1.0);
-    setColor(vec4(hsv2rgb(vec3(f, 0.9, 1)), 1.0));*/
+    vec4 col = vec4(random(fragPos), random(fragPos*2.0), random(fragPos*3.0), 1.0);
+    setColor(col);
+    setLol(0.00001);
   }
 
   void update(vec2 fragPos) {
-    vec2 pos = getPosition();
-    float size = getSize();
-    
-    setPosition(pos);
-    setSize(size);
-
-    
-    /*vec2 vel = getVelocity(x, y);
-    vec4 color = getColor(x, y);
-    float gravity = getGravity(x, y);
-    float friction = getFriction(x, y);
-
-    
-    setVelocity(vel);
-    setColor(color);
-    setGravity(gravity);
-    setFriction(friction);
-    */
+    vec4 col = getColor();
+    float lol = getLol();
+    setColor(col);
+    setLol(lol+0.01);
   }
 }
 
 RENDER {
   vec4 render(vec2 screenPos, vec2 viewPos, float zoom) {
-    vec2 pos = getPosition();
-    float size = getSize();
-    return vec4(vec3(pos, size), 1.0);
+    vec4 col = getColor();
+    return col;
   }
 }`;
