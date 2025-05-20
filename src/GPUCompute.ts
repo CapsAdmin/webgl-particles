@@ -4,18 +4,18 @@ import { createProgramInfo, glsl, twgl } from "./other/WebGL";
 const PIXEL_COMPONENTS = 4;
 
 const createDoubleBufferTexture = (
-  size: number,
+  size: [number, number],
   gl: WebGL2RenderingContext
 ) => {
-  const data = new Float32Array(size * size * PIXEL_COMPONENTS);
+  const data = new Float32Array(size[0] * size[1] * PIXEL_COMPONENTS);
 
   let out = [];
 
   for (let i = 0; i < 2; i++) {
     out.push(
       twgl.createTexture(gl, {
-        width: size,
-        height: size,
+        width: size[0],
+        height: size[1],
         format: gl.RGBA,
         internalFormat: gl.RGBA32F,
         src: data,
@@ -38,7 +38,7 @@ type StructureType = Record<
 >;
 export const createFragmentComputeShader = (
   gl: WebGL2RenderingContext,
-  textureSize: number,
+  textureSize: [number, number],
   shaderCode: string
 ) => {
   const FLOAT = 0 as number;
@@ -100,7 +100,7 @@ export const createFragmentComputeShader = (
     renderShaderCode += `
     ${
       types[len - 1]
-    } get${camelCaseKey}() { return fetchFromXY(dataTexture${textureIndex}).${glslIndex.substring(
+    } get${camelCaseKey}() { return fetchFromXY(dataTexture${textureIndex}, -view.xy * 1000.0, view.z+0.5).${glslIndex.substring(
       textureOffset,
       textureOffset + len
     )}; }`;
@@ -127,25 +127,49 @@ export const createFragmentComputeShader = (
   let fragmendShaderOutput = uniformDeclarations;
   for (let i = 0; i < textureCount; i++) {
     fragmendShaderOutput += `layout(location=${i}) out vec4 dataTexture${i}Out;
-        `;
+    `;
   }
 
   let textureFetchFunctions = `
+    vec4 fetchFromXY(sampler2D texture, vec2 pan, float zoom) {
+        // Get texture dimensions
+        ivec2 texSize = ivec2(1024, 1024);
+        
+        // Calculate center of the texture
+        vec2 center = vec2(texSize) / 2.0;
+        
+        // Apply zoom from center
+        vec2 zoomedCoord = (gl_FragCoord.xy - center) / zoom + center;
+        
+        // Apply pan
+        vec2 finalCoord = zoomedCoord + pan;
+        
+        // Convert to integer coordinates for texelFetch
+        ivec2 texelCoord = ivec2(finalCoord);
+        
+        // Clamp to texture boundaries if needed
+        // texelCoord = clamp(texelCoord, ivec2(0), texSize - 1);
+        
+        // Fetch the texel at the calculated coordinates
+        return texelFetch(texture, texelCoord, 0);
+    }
+
+
     vec4 fetchFromXY(sampler2D texture, vec2 offset) {
         return texelFetch(texture, ivec2(gl_FragCoord.x + offset.x, gl_FragCoord.y + offset.y), 0);
     }
     vec4 fetchFromXY(sampler2D texture) {
         return fetchFromXY(texture, vec2(0.0));
     }    
-    `;
+  `;
 
   const VERTEX = glsl`
-        in vec2 pos;
+    in vec4 pos;
 
-        void main() {
-            gl_Position = vec4(pos, 0, 1);
-        }
-    `;
+    void main() {
+        gl_Position = pos;
+    }
+  `;
 
   const FRAGMENT = glsl`    
     uniform int textureSize;
@@ -173,13 +197,9 @@ export const createFragmentComputeShader = (
   }
 
   const program = createProgramInfo(gl, VERTEX, FRAGMENT);
-
   const quadBuffer = twgl.createBufferInfoFromArrays(gl, {
-    pos: {
-      numComponents: 2,
-      data: [-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0],
-    },
-  });
+      position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
+    });
 
   let framebuffers: Array<FramebufferInfo> = [];
 
@@ -242,8 +262,8 @@ export const createFragmentComputeShader = (
         const output = new Float32Array(PIXEL_COMPONENTS);
 
         let idx = index;
-        let x = Math.trunc(idx / textureSize);
-        let y = Math.trunc(idx % textureSize);
+        let x = Math.trunc(idx / textureSize[0]);
+        let y = Math.trunc(idx % textureSize[1]);
         gl.readPixels(y, x, 1, 1, gl.RGBA, gl.FLOAT, output);
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);

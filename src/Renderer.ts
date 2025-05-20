@@ -11,12 +11,15 @@ export const createSimulationRenderer = (
     getView = () => [0, 0, 1, 1];
   }
   const VERTEX = glsl`
-    in vec2 pos;
-    
+    in vec4 position;
+
+    uniform vec2 screenSize;
+    uniform vec4 view;
+
     void main() {
-      gl_Position = vec4(pos, 0, 1);
+      gl_Position = position;
     }
-    `;
+  `;
 
   const FRAGMENT = glsl`
     out vec4 fragColor;
@@ -32,7 +35,7 @@ export const createSimulationRenderer = (
     ${simulation.renderCode}
 
     void main() {
-        vec2 screenPos = (gl_FragCoord.xy/screenSize)*2.0-1.0;
+        vec2 screenPos = (gl_FragCoord.xy / screenSize) * 2.0 - 1.0;
         fragColor = render(screenPos, view.xy, view.z);
     }
     `;
@@ -41,19 +44,24 @@ export const createSimulationRenderer = (
 
   const programInfo = createProgramInfo(gl, VERTEX, FRAGMENT);
 
+
   const quadBuffer = twgl.createBufferInfoFromArrays(gl, {
-    pos: {
-      numComponents: 2,
-      data: [-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0],
-    },
-  });
+      position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
+    });
 
   const renderSimulation = () => {
-    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    const texW = simulation.compute.textureSize[0]
+    const drawW = gl.drawingBufferWidth
+
+    const texH = simulation.compute.textureSize[1]
+    const drawH = gl.drawingBufferHeight
+
+    console.log(texW, texH)
+
+    gl.viewport(0, 0, texW, texH);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.useProgram(programInfo.program);
 
-    twgl.setBuffersAndAttributes(gl, programInfo, quadBuffer);
 
     const dataTextures: Record<string, WebGLTexture> = {};
 
@@ -62,11 +70,12 @@ export const createSimulationRenderer = (
       dataTextures["dataTexture" + i] = texture;
       i++;
     }
-
+    
+    twgl.setBuffersAndAttributes(gl, programInfo, quadBuffer);
     twgl.setUniforms(programInfo, {
       view: getView!(),
       textureSize: simulation.compute.textureSize,
-      screenSize: [gl.drawingBufferWidth, gl.drawingBufferHeight],
+      screenSize: [texW, texH],
       ...dataTextures,
     });
 

@@ -59,7 +59,7 @@ export const createSimulation = (gl: WebGL2RenderingContext, code: string) => {
 
   const compute = createFragmentComputeShader(
     gl,
-    512,
+    [1024, 1024],
     glsl`
     uniform vec3 mouse;
     uniform float time;
