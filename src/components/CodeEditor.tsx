@@ -4,8 +4,8 @@ import {
   MarkerSeverity,
   languages,
 } from "monaco-editor/esm/vs/editor/editor.api";
-import { useEffect, useRef } from "react";
-import ReactResizeDetector from "react-resize-detector";
+import { useCallback, useEffect, useRef } from "react";
+import { ResizePayload, useResizeDetector } from "react-resize-detector";
 
 // https://github.com/microsoft/monaco-editor/issues/2992
 const conf: languages.LanguageConfiguration = {
@@ -339,67 +339,67 @@ export const CodeEditor = (props: {
     monaco.editor.setModelMarkers(model, "errors", markers);
   }, [props.errors]);
 
-  return (
-    <ReactResizeDetector
-      handleWidth
-      handleHeight
-      onResize={(width, height) => {
+  
+   const onResize = useCallback((payload: ResizePayload) => {
         const editor = editorRef.current;
         if (editor) {
-          editor.layout({ width: width || 512, height: height || 512 });
+          editor.layout({ width: payload.width || 512, height: payload.height || 512 });
         }
+    }, []);
+
+  const {width, height} = useResizeDetector({onResize})
+
+
+  return (
+    <div
+      style={{
+        height: "100%",
+        flex: 1,
+        display: "flex",
       }}
     >
-      <div
-        style={{
-          height: "100%",
-          flex: 1,
-          display: "flex",
+      <Editor
+        height={"100%"}
+        options={{
+          minimap: {
+            enabled: false,
+          },
+          glyphMargin: false,
+          folding: true,
+          lineNumbers: "off",
+          lineDecorationsWidth: 0,
+          lineNumbersMinChars: 0,
+
+          scrollbar: {
+            verticalScrollbarSize: 2,
+            horizontalSliderSize: 2,
+          },
         }}
-      >
-        <Editor
-          height={"100%"}
-          options={{
-            minimap: {
-              enabled: false,
+        beforeMount={(monaco) => {
+          monaco.editor.defineTheme("myCustomTheme", {
+            base: "vs-dark",
+            inherit: true,
+            colors: {
+              "editor.background": "#ff000000",
             },
-            glyphMargin: false,
-            folding: true,
-            lineNumbers: "off",
-            lineDecorationsWidth: 0,
-            lineNumbersMinChars: 0,
 
-            scrollbar: {
-              verticalScrollbarSize: 2,
-              horizontalSliderSize: 2,
-            },
-          }}
-          beforeMount={(monaco) => {
-            monaco.editor.defineTheme("myCustomTheme", {
-              base: "vs-dark",
-              inherit: true,
-              colors: {
-                "editor.background": "#ff000000",
-              },
-
-              rules: [],
-            });
-          }}
-          onMount={(editor, monaco) => {
-            monacoRef.current = monaco;
-            editorRef.current = editor;
-            registerGLSL(monaco);
-          }}
-          theme="myCustomTheme"
-          language={props.language}
-          value={props.code}
-          onChange={(str) => {
-            if (str) {
-              props.onChange(str);
-            }
-          }}
-        />
-      </div>
-    </ReactResizeDetector>
+            rules: [],
+          });
+        }}
+        onMount={(editor, monaco) => {
+          monacoRef.current = monaco;
+          editorRef.current = editor;
+          registerGLSL(monaco);
+        }}
+        theme="myCustomTheme"
+        language={props.language}
+        value={props.code}
+        onChange={(str) => {
+          if (str) {
+            props.onChange(str);
+          }
+        }}
+      />
+    </div>
   );
 };

@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import ReactResizeDetector from "react-resize-detector";
+import {useResizeDetector} from "react-resize-detector";
 import {
   ReactZoomPanPinchRef,
   TransformComponent,
@@ -24,8 +24,15 @@ export const CanvasMap = (props: {
   viewSize: number;
   worldScale: number;
 }) => {
-  const [viewWidth, setViewWidth] = useState(window.innerWidth);
-  const [viewHeight, setViewHeight] = useState(window.innerHeight);
+  const onResize = useCallback(() => {
+      center(0);
+  }, []);
+
+  const {width, height} = useResizeDetector({onResize})
+
+  const viewHeight = height || window.innerHeight || 700
+  const viewWidth = width || window.innerWidth || 700
+
   const worldWidth = viewWidth * props.worldScale;
   const worldHeight = viewHeight * props.worldScale;
   const panRef = useRef<ReactZoomPanPinchRef | null>(null);
@@ -38,10 +45,16 @@ export const CanvasMap = (props: {
   useEffect(() => {
     const stop = renderLoop(() => {
       const pan = panRef.current;
+
       if (!pan) return;
-      const scale = pan.state.scale * 0.07;
-      let x = pan.state.positionX;
-      let y = pan.state.positionY;
+      
+      const state = (pan as any)?.instance?.transformState as typeof pan.state;
+
+      if (!state) return;
+
+      const scale = state.scale * 0.07;
+      let x = state.positionX;
+      let y = state.positionY;
 
       x = -(x - viewWidth / 2) / worldWidth;
       y = -(y - viewHeight / 2) / worldHeight;
@@ -66,8 +79,8 @@ export const CanvasMap = (props: {
 
       x = -x;
 
-      x = x + ((pan.state.positionX / worldWidth) * 2 - 1) * 0.01;
-      y = y + ((pan.state.positionY / worldHeight) * 2 - 1 + 0.5) * 0.01;
+      x = x + ((state.positionX / worldWidth) * 2 - 1) * 0.01;
+      y = y + ((state.positionY / worldHeight) * 2 - 1 + 0.5) * 0.01;
 
       props.viewRef.current = [x, y, scale, viewWidth / viewHeight];
     });
@@ -92,98 +105,86 @@ export const CanvasMap = (props: {
   );
 
   return (
-    <ReactResizeDetector
-      handleWidth
-      handleHeight
-      onResize={(width, height) => {
-        width = width || 700;
-        height = height || 700;
-        setViewWidth(width);
-        setViewHeight(height);
-        center(0);
+    <div
+      style={{
+        position: "relative",
+        flex: 1,
+        height: "100%",
       }}
     >
-      <div
-        style={{
-          position: "relative",
-          flex: 1,
-          height: "100%",
-        }}
+      <TransformWrapper
+        minScale={0.25}
+        maxScale={100}
+        ref={panRef}
+        limitToBounds={false}
       >
-        <TransformWrapper
-          minScale={0.25}
-          maxScale={100}
-          ref={panRef}
-          limitToBounds={false}
-        >
-          <>
+        <>
+          <div
+            style={{
+              position: "absolute",
+              bottom: 25,
+              right: 15,
+              zIndex: 100,
+            }}
+          >
+            <Stack direction={"column"}>
+              <IconButton
+                size="small"
+                onClick={() => {
+                  center(1000);
+                }}
+              >
+                <GpsFixed />
+              </IconButton>
+              <IconButton
+                size="small"
+                onClick={() => panRef.current!.zoomIn(undefined, 500)}
+              >
+                <Add />
+              </IconButton>
+              <IconButton
+                size="small"
+                onClick={() => panRef.current!.zoomOut(undefined, 500)}
+              >
+                <Remove />
+              </IconButton>
+            </Stack>
+          </div>
+          <TransformComponent
+            wrapperStyle={{
+              width: viewWidth,
+              height: viewHeight,
+            }}
+            contentStyle={{
+              width: worldWidth,
+              height: worldHeight,
+            }}
+          >
             <div
               style={{
-                position: "absolute",
-                bottom: 25,
-                right: 15,
-                zIndex: 100,
-              }}
-            >
-              <Stack direction={"column"}>
-                <IconButton
-                  size="small"
-                  onClick={() => {
-                    center(1000);
-                  }}
-                >
-                  <GpsFixed />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => panRef.current!.zoomIn(undefined, 500)}
-                >
-                  <Add />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => panRef.current!.zoomOut(undefined, 500)}
-                >
-                  <Remove />
-                </IconButton>
-              </Stack>
-            </div>
-            <TransformComponent
-              wrapperStyle={{
-                width: viewWidth,
-                height: viewHeight,
-              }}
-              contentStyle={{
                 width: worldWidth,
                 height: worldHeight,
               }}
-            >
-              <div
-                style={{
-                  width: worldWidth,
-                  height: worldHeight,
-                }}
-              ></div>
-            </TransformComponent>
-            <canvas
-              width={renderWidth}
-              height={renderHeight}
-              ref={props.canvasRef}
-              style={{
-                objectFit: "cover",
-                pointerEvents: "none",
-                position: "absolute",
+            ></div>
+          </TransformComponent>
+          <canvas
+            width={renderWidth}
+            height={renderHeight}
+            ref={props.canvasRef}
+            style={{
+              objectFit: "cover",
+              pointerEvents: "none",
+              position: "absolute",
 
-                width: viewWidth,
-                height: viewHeight,
-                zIndex: 10,
-                top: 0,
-                left: 0,
-              }}
-            />
-          </>
-        </TransformWrapper>
-      </div>
-    </ReactResizeDetector>
+              width: viewWidth,
+              height: viewHeight,
+              zIndex: 10,
+              top: 0,
+              left: 0,
+            }}
+          />
+        </>
+      </TransformWrapper>
+    </div>
   );
 };
