@@ -65,32 +65,36 @@ export const createFragmentComputeShader = (
     const camelCaseKey = key.charAt(0).toUpperCase() + key.slice(1);
 
     sharedShaderCode += `
-        ${types[len - 1]
-      } get${camelCaseKey}(vec2 offset) { return fetchFromXY(dataTexture${textureIndex}, offset).${glslIndex.substring(
-        textureOffset,
-        textureOffset + len
-      )}; } `;
+        ${
+          types[len - 1]
+        } get${camelCaseKey}(vec2 offset) { return fetchFromXY(dataTexture${textureIndex}, offset).${glslIndex.substring(
+      textureOffset,
+      textureOffset + len
+    )}; } `;
 
     sharedShaderCode += `
-        ${types[len - 1]
-      } get${camelCaseKey}() { return fetchFromXY(dataTexture${textureIndex}).${glslIndex.substring(
-        textureOffset,
-        textureOffset + len
-      )}; }`;
+        ${
+          types[len - 1]
+        } get${camelCaseKey}() { return fetchFromXY(dataTexture${textureIndex}).${glslIndex.substring(
+      textureOffset,
+      textureOffset + len
+    )}; }`;
 
     renderShaderCode += `
-    ${types[len - 1]
-      } get${camelCaseKey}() { return fetchFromXY(dataTexture${textureIndex}, -view.xy * 1000.0, view.z+0.5).${glslIndex.substring(
-        textureOffset,
-        textureOffset + len
-      )}; }`;
+    ${
+      types[len - 1]
+    } get${camelCaseKey}() { return fetchFromXY(dataTexture${textureIndex}, view.xy, view.z).${glslIndex.substring(
+      textureOffset,
+      textureOffset + len
+    )}; }`;
 
     writeShaderCode += `
-        void set${camelCaseKey}(${types[len - 1]
-      } val) { dataTexture${textureIndex}Out.${glslIndex.substring(
-        textureOffset,
-        textureOffset + len
-      )} = val; }`;
+        void set${camelCaseKey}(${
+      types[len - 1]
+    } val) { dataTexture${textureIndex}Out.${glslIndex.substring(
+      textureOffset,
+      textureOffset + len
+    )} = val; }`;
 
     floatCount += len;
   }
@@ -112,7 +116,7 @@ export const createFragmentComputeShader = (
   let textureFetchFunctions = `
     vec4 fetchFromXY(sampler2D texture, vec2 pan, float zoom) {
         // Get texture dimensions
-        ivec2 texSize = ivec2(1024, 1024);
+        ivec2 texSize = ivec2(${textureSize[0]}, ${textureSize[1]});
         
         // Calculate center of the texture
         vec2 center = vec2(texSize) / 2.0;

@@ -30,12 +30,11 @@ export const balancedMatch = (str: string, pre: string) => {
 };
 export const createSimulation = (gl: WebGL2RenderingContext, code: string) => {
   let jsonConfig: {
-    worldScale: number,
-    layout: Record<string, number>,
-    fps?: number,
+    layout: Record<string, number>;
+    fps?: number;
     replacements: {
-      [key: string]: string,
-    }
+      [key: string]: string;
+    };
   };
   let src =
     "() => {\n" + code.substring(...balancedMatch(code, "CONFIG")) + "\n};";
@@ -45,7 +44,6 @@ export const createSimulation = (gl: WebGL2RenderingContext, code: string) => {
     console.error(src);
     throw new Error("Error in simulation code");
   }
-  jsonConfig.worldScale = jsonConfig.worldScale || 15;
 
   if (!jsonConfig.layout) {
     throw new Error("No layout found in simulation code");
@@ -81,7 +79,6 @@ export const createSimulation = (gl: WebGL2RenderingContext, code: string) => {
     glsl`
     uniform vec3 mouse;
     uniform float time;
-    uniform float worldScale;
     uniform float deltaTime;
 
     vec3 rgb2hsv(vec3 c)
@@ -117,39 +114,37 @@ export const createSimulation = (gl: WebGL2RenderingContext, code: string) => {
   `
   );
 
- let timePassed = 0;
-let timeUntilNextUpdate = 0;
+  let timePassed = 0;
+  let timeUntilNextUpdate = 0;
 
-return {
-  compute,
-  renderCode,
-  jsonConfig,
-  update(dt: number) {
-    if (jsonConfig.fps) {
-      const targetDeltaTime = 1 / jsonConfig.fps;
-      timePassed += dt;
-      timeUntilNextUpdate -= dt;
-      
-      // Only update when we've accumulated enough time
-      if (timeUntilNextUpdate <= 0) {
+  return {
+    compute,
+    renderCode,
+    jsonConfig,
+    update(dt: number) {
+      if (jsonConfig.fps) {
+        const targetDeltaTime = 1 / jsonConfig.fps;
+        timePassed += dt;
+        timeUntilNextUpdate -= dt;
+
+        // Only update when we've accumulated enough time
+        if (timeUntilNextUpdate <= 0) {
+          compute.update({
+            time: Date.now() / 1000,
+            deltaTime: targetDeltaTime, // Use consistent deltaTime based on fps
+          });
+
+          // Reset timer and potentially carry over any excess time
+          timeUntilNextUpdate = targetDeltaTime;
+        }
+      } else {
+        // Original behavior when no fps is defined
         compute.update({
-          worldScale: jsonConfig.worldScale,
           time: Date.now() / 1000,
-          deltaTime: targetDeltaTime, // Use consistent deltaTime based on fps
+          deltaTime: dt,
         });
-        
-        // Reset timer and potentially carry over any excess time
-        timeUntilNextUpdate = targetDeltaTime;
+        timePassed += dt;
       }
-    } else {
-      // Original behavior when no fps is defined
-      compute.update({
-        worldScale: jsonConfig.worldScale,
-        time: Date.now() / 1000,
-        deltaTime: dt,
-      });
-      timePassed += dt;
-    }
-  },
-};
+    },
+  };
 };

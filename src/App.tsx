@@ -12,7 +12,6 @@ function App() {
   let [error, setError] = useState("");
   const [showEditor, setShowEditor] = useState(false);
   useState<(i: number, state: Float32Array[]) => void>();
-  const [worldScale, setWorldScale] = useState(15);
 
   const shaderError = error.includes("SHADER: ERROR") ? error : undefined;
   if (shaderError) {
@@ -20,7 +19,7 @@ function App() {
   }
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const viewRef = useRef<MapView>([0, 0, 1, 1]);
+  const viewRef = useRef<[number, number, number, number]>([0, 0, 1, 1]);
 
   useEffect(() => {
     const gl = canvasRef.current?.getContext("webgl2", {
@@ -30,8 +29,6 @@ function App() {
 
     try {
       let simulation = createSimulation(gl, code);
-
-      setWorldScale(simulation.jsonConfig.worldScale);
 
       let destroy = createSimulationRenderer(gl, simulation, () => {
         let view = viewRef.current;
@@ -72,8 +69,7 @@ function App() {
         }}
       >
         <CanvasMap
-          viewSize={window.innerWidth}
-          worldScale={worldScale}
+          worldSize={[1024, 1024]}
           viewRef={viewRef}
           canvasRef={canvasRef}
         />

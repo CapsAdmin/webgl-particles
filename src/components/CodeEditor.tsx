@@ -5,7 +5,7 @@ import {
   languages,
 } from "monaco-editor/esm/vs/editor/editor.api";
 import { useCallback, useEffect, useRef } from "react";
-import { ResizePayload, useResizeDetector } from "react-resize-detector";
+import { useResize } from "../other/useResize";
 
 // https://github.com/microsoft/monaco-editor/issues/2992
 const conf: languages.LanguageConfiguration = {
@@ -340,14 +340,15 @@ export const CodeEditor = (props: {
   }, [props.errors]);
 
   
-   const onResize = useCallback((payload: ResizePayload) => {
+   const onResize = useCallback((w: number, h: number) => {
         const editor = editorRef.current;
         if (editor) {
-          editor.layout({ width: payload.width || 512, height: payload.height || 512 });
+          editor.layout({ width: w || 512, height: h || 512 });
         }
     }, []);
 
-  const {width, height} = useResizeDetector({onResize})
+
+    useResize(onResize);
 
 
   return (

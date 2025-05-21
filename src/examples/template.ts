@@ -2,7 +2,6 @@ import { glsl } from "../other/WebGL";
 
 export const templateExample = glsl`CONFIG {
   return {
-    worldScale: 15,
     layout: {
       state: 1,
     },
