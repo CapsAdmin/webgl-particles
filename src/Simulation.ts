@@ -29,7 +29,14 @@ export const balancedMatch = (str: string, pre: string) => {
   throw new Error("No matching code found for " + pre);
 };
 export const createSimulation = (gl: WebGL2RenderingContext, code: string) => {
-  let jsonConfig: any = null;
+  let jsonConfig: {
+    worldScale: number,
+    layout: Record<string, number>,
+    fps?: number,
+    replacements: {
+      [key: string]: string,
+    }
+  };
   let src =
     "() => {\n" + code.substring(...balancedMatch(code, "CONFIG")) + "\n};";
   try {
@@ -110,16 +117,39 @@ export const createSimulation = (gl: WebGL2RenderingContext, code: string) => {
   `
   );
 
-  return {
-    compute,
-    renderCode,
-    jsonConfig,
-    update(dt: number) {
+ let timePassed = 0;
+let timeUntilNextUpdate = 0;
+
+return {
+  compute,
+  renderCode,
+  jsonConfig,
+  update(dt: number) {
+    if (jsonConfig.fps) {
+      const targetDeltaTime = 1 / jsonConfig.fps;
+      timePassed += dt;
+      timeUntilNextUpdate -= dt;
+      
+      // Only update when we've accumulated enough time
+      if (timeUntilNextUpdate <= 0) {
+        compute.update({
+          worldScale: jsonConfig.worldScale,
+          time: Date.now() / 1000,
+          deltaTime: targetDeltaTime, // Use consistent deltaTime based on fps
+        });
+        
+        // Reset timer and potentially carry over any excess time
+        timeUntilNextUpdate = targetDeltaTime;
+      }
+    } else {
+      // Original behavior when no fps is defined
       compute.update({
         worldScale: jsonConfig.worldScale,
         time: Date.now() / 1000,
         deltaTime: dt,
       });
-    },
-  };
+      timePassed += dt;
+    }
+  },
+};
 };

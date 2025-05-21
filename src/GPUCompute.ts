@@ -29,17 +29,10 @@ const createDoubleBufferTexture = (
   return out;
 };
 
-type StructureType = Record<
-  string,
-  | number
-  | [number, number]
-  | [number, number, number]
-  | [number, number, number, number]
->;
 export const createFragmentComputeShader = (
   gl: WebGL2RenderingContext,
   textureSize: [number, number],
-  ItemStructure: StructureType,
+  ItemStructure: Record<string, number>,
   shaderCode: string
 ) => {
   let floatCount = 0;
@@ -55,7 +48,7 @@ export const createFragmentComputeShader = (
   for (const [key, val] of Object.entries(ItemStructure)) {
     const textureIndex = Math.floor(floatCount / PIXEL_COMPONENTS);
     const textureOffset = floatCount % PIXEL_COMPONENTS;
-    let len = typeof val == "number" ? 1 : val.length;
+    let len = val as 1 | 2 | 3 | 4;
 
     let glslIndex = "xyzw";
     let types = ["float", "vec2", "vec3", "vec4"];
@@ -72,36 +65,32 @@ export const createFragmentComputeShader = (
     const camelCaseKey = key.charAt(0).toUpperCase() + key.slice(1);
 
     sharedShaderCode += `
-        ${
-          types[len - 1]
-        } get${camelCaseKey}(vec2 offset) { return fetchFromXY(dataTexture${textureIndex}, offset).${glslIndex.substring(
-      textureOffset,
-      textureOffset + len
-    )}; } `;
+        ${types[len - 1]
+      } get${camelCaseKey}(vec2 offset) { return fetchFromXY(dataTexture${textureIndex}, offset).${glslIndex.substring(
+        textureOffset,
+        textureOffset + len
+      )}; } `;
 
     sharedShaderCode += `
-        ${
-          types[len - 1]
-        } get${camelCaseKey}() { return fetchFromXY(dataTexture${textureIndex}).${glslIndex.substring(
-      textureOffset,
-      textureOffset + len
-    )}; }`;
+        ${types[len - 1]
+      } get${camelCaseKey}() { return fetchFromXY(dataTexture${textureIndex}).${glslIndex.substring(
+        textureOffset,
+        textureOffset + len
+      )}; }`;
 
     renderShaderCode += `
-    ${
-      types[len - 1]
-    } get${camelCaseKey}() { return fetchFromXY(dataTexture${textureIndex}, -view.xy * 1000.0, view.z+0.5).${glslIndex.substring(
-      textureOffset,
-      textureOffset + len
-    )}; }`;
+    ${types[len - 1]
+      } get${camelCaseKey}() { return fetchFromXY(dataTexture${textureIndex}, -view.xy * 1000.0, view.z+0.5).${glslIndex.substring(
+        textureOffset,
+        textureOffset + len
+      )}; }`;
 
     writeShaderCode += `
-        void set${camelCaseKey}(${
-      types[len - 1]
-    } val) { dataTexture${textureIndex}Out.${glslIndex.substring(
-      textureOffset,
-      textureOffset + len
-    )} = val; }`;
+        void set${camelCaseKey}(${types[len - 1]
+      } val) { dataTexture${textureIndex}Out.${glslIndex.substring(
+        textureOffset,
+        textureOffset + len
+      )} = val; }`;
 
     floatCount += len;
   }
