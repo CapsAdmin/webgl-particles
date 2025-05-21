@@ -10,6 +10,7 @@ import { Stack } from "@mui/system";
 import { useState } from "react";
 import { CodeEditor } from "./components/CodeEditor";
 import { templateExample } from "./examples/template";
+import { gooExample } from "./examples/goo";
 
 const key = "webgl-simulation-code";
 let initialConfig = templateExample;
@@ -37,6 +38,7 @@ export const useSimulationCode = () => {
 
 const presets = {
   template: templateExample,
+  goo: gooExample,
 };
 
 export const ConifgEditor = (props: {
