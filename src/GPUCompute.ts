@@ -87,6 +87,13 @@ export const createFragmentComputeShader = (
       textureOffset,
       textureOffset + len
     )}; }`;
+    renderShaderCode += `
+    ${
+      types[len - 1]
+    } get${camelCaseKey}(vec2 offset) { return fetchFromXY(dataTexture${textureIndex}, offset + view.xy, view.z).${glslIndex.substring(
+      textureOffset,
+      textureOffset + len
+    )}; }`;
 
     writeShaderCode += `
         void set${camelCaseKey}(${
